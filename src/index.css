@@ -1,0 +1,105 @@
+@import "tailwindcss";
+
+/* ─── NJOb Design Tokens (FlutterFlow Dark Theme) ──────────────────────────── */
+@layer base {
+  :root {
+    /* Primary palette — roxo lavanda */
+    --primary:   296 100% 74%;   /* #C980FF */
+    --secondary: 258  99% 72%;   /* #9D70FF */
+    --tertiary:  292  72% 56%;   /* #CC3CE4 */
+
+    /* Backgrounds */
+    --background:           0 0%  0%;    /* #000000 */
+    --secondary-background: 270 22%  8%; /* #141018 */
+    --card:                272 14% 11%;  /* #1D1921 */
+    --card-alt:              0  0% 20%;  /* #333333 */
+    --surface:               0  0% 16%;  /* #2A2A2A */
+    --alternate:           210 14% 18%;  /* #262D34 */
+
+    /* Text */
+    --foreground:         0  0% 100%;  /* #FFFFFF */
+    --foreground-muted:   0  0%  85%;  /* #DADADA */
+    --muted-foreground:   0  0%  66%;  /* #A7A7A7 */
+
+    /* Semantic */
+    --success:  149 84% 38%;  /* #10B65D */
+    --warning:   45 93% 60%;  /* #F9D03E */
+    --error:     352 86% 53%; /* #F01D37 */
+    --info:      211 100% 38%; /* #0066C3 */
+
+    /* UI */
+    --border:       270 14% 18%;  /* ~#2A2730 */
+    --input:        272 14% 11%;  /* #1D1921 */
+    --ring:         296 100% 74%; /* #C980FF */
+    --radius:       0.75rem;
+
+    /* Brand colors (hot pink from logo) */
+    --brand-pink:   323 100% 50%; /* #FF0080 */
+    --brand-purple: 265  76% 56%; /* #7C3AED-ish */
+  }
+}
+
+/* ─── Base styles ───────────────────────────────────────────────────────────── */
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: #000000;
+    color: #ffffff;
+    font-family: 'Roboto', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100dvh;
+    overscroll-behavior: none;
+  }
+
+  /* Scrollbar oculta para mobile feel */
+  * {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  *::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ─── Utility classes ───────────────────────────────────────────────────────── */
+@layer utilities {
+  .font-display {
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  /* Gradiente da logo */
+  .gradient-brand {
+    background: linear-gradient(135deg, #FF0080, #C980FF);
+  }
+
+  .text-gradient-brand {
+    background: linear-gradient(135deg, #FF0080, #C980FF);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Glow primário */
+  .glow-primary {
+    box-shadow: 0 0 24px hsl(296 100% 74% / 0.35);
+  }
+
+  /* Safe area para mobile */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+}
