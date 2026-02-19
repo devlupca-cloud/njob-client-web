@@ -1,9 +1,8 @@
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Radio } from 'lucide-react'
 
 export default function LivePage() {
   const navigate = useNavigate()
-  const { id } = useParams<{ id: string }>()
 
   return (
     <div className="flex flex-col min-h-full bg-[hsl(var(--background))]">

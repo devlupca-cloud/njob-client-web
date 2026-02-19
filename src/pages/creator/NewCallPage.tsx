@@ -1,10 +1,8 @@
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Video } from 'lucide-react'
 
 export default function NewCallPage() {
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
-  const creatorId = searchParams.get('creatorId')
 
   return (
     <div className="flex flex-col min-h-full bg-[hsl(var(--background))]">
