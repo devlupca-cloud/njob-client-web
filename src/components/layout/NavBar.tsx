@@ -4,9 +4,9 @@ import Logo from '@/components/ui/Logo'
 
 const navItems = [
   { icon: Home,          label: 'Home',     path: '/home' },
-  { icon: MessageCircle, label: 'Chat',     path: '/chat' },
+  // { icon: MessageCircle, label: 'Chat',     path: '/chat' },
   { icon: ShoppingBag,   label: 'Compras',  path: '/purchases' },
-  { icon: Bell,          label: 'Alertas',  path: '/notifications' },
+  // { icon: Bell,          label: 'Alertas',  path: '/notifications' },
   { icon: User,          label: 'Perfil',   path: '/profile' },
 ]
 

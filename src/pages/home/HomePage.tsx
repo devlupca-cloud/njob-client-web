@@ -214,18 +214,9 @@ export default function HomePage() {
       <header className="sticky top-0 z-10 bg-[hsl(var(--background))] border-b border-[hsl(var(--border))]">
         <div className="max-w-7xl mx-auto px-4 pt-4 pb-3 flex flex-col gap-3">
 
-        {/* Logo + notification */}
+        {/* Logo */}
         <div className="flex items-center justify-between">
           <Logo size="sm" variant="image" className="rounded-xl" />
-
-          <Link
-            to="/notifications"
-            className="relative w-9 h-9 flex items-center justify-center rounded-full bg-[hsl(var(--card))]"
-            aria-label="Notificações"
-          >
-            <Bell size={18} className="text-[hsl(var(--foreground))]" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[hsl(var(--primary))]" />
-          </Link>
         </div>
 
         {/* Search bar */}
