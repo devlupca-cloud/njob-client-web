@@ -79,15 +79,15 @@ async function fetchCreatorProfile(
   // Fetch packs (não vem na RPC)
   const { data: packsData } = await supabase
     .from('packs')
-    .select('id, title, description, price, cover_url, pack_items(id)')
-    .eq('creator_id', profileId)
+    .select('id, title, description, price, cover_image_url, pack_items(id)')
+    .eq('profile_id', profileId)
     .order('created_at', { ascending: false })
 
   const packs: PackInfo[] = (packsData ?? []).map((p: any) => ({
     id: p.id,
     title: p.title,
     price: p.price,
-    cover_url: p.cover_url ?? null,
+    cover_url: p.cover_image_url ?? null,
     items_count: p.pack_items?.length ?? 0,
   }))
 
@@ -97,30 +97,20 @@ async function fetchCreatorProfile(
     .select('*')
     .eq('creator_id', profileId)
     .in('status', ['scheduled', 'live'])
-    .order('scheduled_at', { ascending: true })
+    .order('scheduled_start_time', { ascending: true })
     .limit(5)
 
   const lives: LiveStream[] = (livesData ?? []) as LiveStream[]
 
-  // Fetch subscribers count
+  // Fetch subscribers count (creator_subscriptions tracks plan-level, not per-user)
   const { count: subscribersCount } = await supabase
     .from('creator_subscriptions')
     .select('id', { count: 'exact', head: true })
     .eq('creator_id', profileId)
     .eq('status', 'active')
 
-  // Check if current user is subscribed
-  let isSubscribed = false
-  if (userId) {
-    const { data: subData } = await supabase
-      .from('creator_subscriptions')
-      .select('id')
-      .eq('creator_id', profileId)
-      .eq('client_id', userId)
-      .eq('status', 'active')
-      .maybeSingle()
-    isSubscribed = !!subData
-  }
+  // TODO: per-user subscription check not yet supported by DB schema
+  const isSubscribed = false
 
   // Mapear descricao da RPC para CreatorDescription
   const desc = d.descricao
@@ -221,13 +211,13 @@ function LiveInfoModal({
           <div className="flex items-center gap-2">
             <Calendar size={18} className="text-[hsl(var(--muted-foreground))]" />
             <span className="text-sm text-[hsl(var(--muted-foreground))]">
-              {formatDate(live.scheduled_at)}
+              {formatDate(live.scheduled_start_time)}
             </span>
           </div>
           <div className="flex items-center gap-2">
             <DollarSign size={18} className="text-[hsl(var(--muted-foreground))]" />
             <span className="text-sm text-[hsl(var(--muted-foreground))]">
-              {live.is_free ? 'Gratuita' : formatPrice(live.price ?? 0)}
+              {!live.ticket_price ? 'Gratuita' : formatPrice(live.ticket_price)}
             </span>
           </div>
         </div>
@@ -542,7 +532,7 @@ export default function CreatorProfilePage() {
 
   const handleEnterLive = async (live: LiveStream) => {
     setSelectedLive(null)
-    if (live.is_free || live.status === 'live') {
+    if (!live.ticket_price || live.status === 'live') {
       navigate(`/lives/${live.id}`)
       return
     }
@@ -565,7 +555,7 @@ export default function CreatorProfilePage() {
   }
 
   return (
-    <div className="flex flex-col bg-[hsl(var(--background))] min-h-screen pb-20 relative">
+    <div className="flex flex-col bg-[hsl(var(--background))] min-h-screen pb-20 relative max-w-4xl mx-auto w-full">
 
       {/* ── Header bar ──────────────────────────────────────────────────────── */}
       <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-4 pt-safe pt-4">
@@ -814,7 +804,7 @@ export default function CreatorProfilePage() {
               </button>
             )}
           </div>
-          <div className="flex gap-3 overflow-x-auto scrollbar-none px-4 pb-1">
+          <div className="flex gap-3 overflow-x-auto scrollbar-none px-4 pb-1 md:grid md:grid-cols-3 md:overflow-x-visible">
             {packs.map((pack) => (
               <CardPack
                 key={pack.id}
@@ -847,7 +837,7 @@ export default function CreatorProfilePage() {
                   </div>
                   <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate">{activeLive.title}</p>
                   <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                    {activeLive.is_free ? 'Gratuita' : formatPrice(activeLive.price ?? 0)}
+                    {!activeLive.ticket_price ? 'Gratuita' : formatPrice(activeLive.ticket_price)}
                   </p>
                 </div>
                 <ChevronRight size={16} className="text-[hsl(var(--muted-foreground))] shrink-0" />
@@ -868,13 +858,13 @@ export default function CreatorProfilePage() {
                   <div className="flex items-center gap-2 mt-0.5">
                     <Clock size={11} className="text-[hsl(var(--muted-foreground))]" />
                     <span className="text-xs text-[hsl(var(--muted-foreground))]">
-                      {formatDate(live.scheduled_at)}
+                      {formatDate(live.scheduled_start_time)}
                     </span>
                   </div>
                 </div>
                 <div className="text-right shrink-0">
                   <span className="text-xs font-semibold text-[hsl(var(--primary))]">
-                    {live.is_free ? 'Gratis' : formatPrice(live.price ?? 0)}
+                    {!live.ticket_price ? 'Gratis' : formatPrice(live.ticket_price)}
                   </span>
                 </div>
               </button>
@@ -897,7 +887,7 @@ export default function CreatorProfilePage() {
               </button>
             )}
           </div>
-          <div className="grid grid-cols-3 gap-1 rounded-xl overflow-hidden">
+          <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-1 rounded-xl overflow-hidden">
             {displayPhotos.map((img, i) => (
               <div
                 key={img.id}

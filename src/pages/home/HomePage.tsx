@@ -70,7 +70,7 @@ async function fetchCreators(): Promise<Creator[]> {
 
 function SkeletonGrid() {
   return (
-    <div className="grid grid-cols-2 gap-3 px-4 pt-4">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 px-4 pt-4">
       {Array.from({ length: 6 }).map((_, i) => (
         <CardCreatorSkeleton key={i} />
       ))}
@@ -132,7 +132,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return (
     <div>
       <h2 className="text-base font-bold text-[hsl(var(--foreground))] px-4 mb-3">{title}</h2>
-      <div className="grid grid-cols-2 gap-3 px-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 px-4">
         {children}
       </div>
     </div>
@@ -287,7 +287,7 @@ export default function HomePage() {
               filtered.length === 0 ? (
                 <EmptyState query={search} />
               ) : (
-                <div className="grid grid-cols-2 gap-3 p-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 p-4">
                   {filtered.map((creator) => (
                     <CardCreator key={creator.id} creator={creator} />
                   ))}

@@ -171,14 +171,16 @@ export interface LiveStream {
   creator_id: string
   title: string
   description: string | null
-  scheduled_at: string
-  started_at: string | null
-  ended_at: string | null
-  price: number | null
-  is_free: boolean
+  scheduled_start_time: string
+  actual_start_time: string | null
+  actual_end_time: string | null
+  ticket_price: number | null
+  currency: string
   status: 'scheduled' | 'live' | 'ended'
   stream_url: string | null
-  thumbnail_url: string | null
+  cover_image_url: string | null
+  estimated_duration_minutes: number | null
+  participant_limit: number | null
 }
 
 // ─── Calls ───────────────────────────────────────────────────────────────────

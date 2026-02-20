@@ -83,7 +83,7 @@ export default function CouponDetailPage() {
   const active = coupon ? isCouponActive(coupon) : false
 
   return (
-    <div className="flex flex-col min-h-full bg-[hsl(var(--background))]">
+    <div className="flex flex-col min-h-full bg-[hsl(var(--background))] max-w-3xl mx-auto w-full">
 
       {/* Header */}
       <header className="sticky top-0 z-10 bg-[hsl(var(--background))] border-b border-[hsl(var(--border))] px-4 pt-4 pb-3">

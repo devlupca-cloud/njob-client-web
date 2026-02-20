@@ -155,7 +155,7 @@ export default function VerifyOTPPage() {
 
   return (
     <div className="min-h-screen bg-[hsl(var(--background))] flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-sm flex flex-col gap-8">
+      <div className="w-full max-w-sm sm:max-w-md flex flex-col gap-8">
 
         {/* Back button */}
         <Link

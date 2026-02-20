@@ -108,7 +108,7 @@ export default function ProfilePage() {
   const avatarUrl = !avatarError && profile?.avatar_url ? profile.avatar_url : null
 
   return (
-    <div className="min-h-screen bg-[hsl(var(--background))] pb-20">
+    <div className="min-h-screen bg-[hsl(var(--background))] pb-20 max-w-2xl mx-auto w-full">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-[hsl(var(--background))] border-b border-[hsl(var(--border))]">
         <div className="flex items-center justify-center h-14 px-4">

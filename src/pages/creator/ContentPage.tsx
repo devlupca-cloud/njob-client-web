@@ -70,7 +70,7 @@ async function fetchCreatorContent(
   const { data: packsData, error: packsError } = await supabase
     .from('packs')
     .select('id, title, price, pack_items(*)')
-    .eq('creator_id', profileId)
+    .eq('profile_id', profileId)
     .order('created_at', { ascending: false })
 
   if (packsError) throw packsError
@@ -81,7 +81,7 @@ async function fetchCreatorContent(
     title: p.title,
     description: p.description ?? null,
     price: p.price,
-    cover_url: p.cover_url ?? null,
+    cover_url: p.cover_image_url ?? null,
     items: p.pack_items ?? [],
     created_at: p.created_at,
   }))

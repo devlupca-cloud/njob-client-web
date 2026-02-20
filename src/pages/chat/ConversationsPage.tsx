@@ -150,7 +150,7 @@ export default function ConversationsPage() {
   }
 
   return (
-    <div className="flex flex-col min-h-[calc(100vh-4rem)] bg-[hsl(var(--background))]">
+    <div className="flex flex-col min-h-[calc(100vh-4rem)] bg-[hsl(var(--background))] max-w-3xl mx-auto w-full">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-[hsl(var(--background))] border-b border-[hsl(var(--border))]">
         <div className="flex items-center justify-between px-4 py-4">
