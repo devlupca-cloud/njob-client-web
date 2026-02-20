@@ -35,7 +35,7 @@ serve(async (req)=>{
     if (!userId || !userEmail) throw new Error("Dados do usuário inválidos no token");
     const { price_id, success_url: custom_success_url, cancel_url: custom_cancel_url } = await req.json();
     if (!price_id) throw new Error("price_id é obrigatório");
-    const defaultUrl = 'https://njobs-app-yrhyht.flutterflow.app/splah';
+    const defaultUrl = 'https://njob-client-web.vercel.app/';
     const session = await stripe.checkout.sessions.create({
       payment_method_types: [
         'card'

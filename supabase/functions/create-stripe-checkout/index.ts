@@ -186,15 +186,15 @@ serve(async (req) => {
           break;
         case "video-call":
         case "pack":
-          success_url = "https://njob-client-teaxua.flutterflow.app/compras";
+          success_url = "https://njob-client-web.vercel.app/purchases";
           break;
         default:
-          success_url = "https://njob-client-teaxua.flutterflow.app/";
+          success_url = "https://njob-client-web.vercel.app/";
           break;
       }
     }
 
-    cancel_url = custom_cancel_url || "https://njob-client-teaxua.flutterflow.app/";
+    cancel_url = custom_cancel_url || "https://njob-client-web.vercel.app/";
 
     // 7) CRIAR CHECKOUT COMO DIRECT CHARGE NA CONTA CONECTADA
     const session = await stripe.checkout.sessions.create(
