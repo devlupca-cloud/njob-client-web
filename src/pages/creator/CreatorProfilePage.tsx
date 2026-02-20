@@ -21,6 +21,7 @@ import {
   DollarSign,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { APP_URL } from '@/lib/config'
 import { useAuthStore } from '@/store/authStore'
 import CardPack from '@/components/cards/CardPack'
 import type { Creator, PackInfo, LiveStream } from '@/types'
@@ -79,7 +80,7 @@ async function fetchCreatorProfile(
   // Fetch packs (não vem na RPC)
   const { data: packsData } = await supabase
     .from('packs')
-    .select('id, title, description, price, cover_image_url, pack_items(id)')
+    .select('id, title, description, price, cover_image_url, stripe_price_id, pack_items(id)')
     .eq('profile_id', profileId)
     .order('created_at', { ascending: false })
 
@@ -89,6 +90,8 @@ async function fetchCreatorProfile(
     price: p.price,
     cover_url: p.cover_image_url ?? null,
     items_count: p.pack_items?.length ?? 0,
+    stripe_price_id: p.stripe_price_id ?? null,
+    creator_id: profileId,
   }))
 
   // Fetch lives (não vem na RPC)
@@ -102,15 +105,22 @@ async function fetchCreatorProfile(
 
   const lives: LiveStream[] = (livesData ?? []) as LiveStream[]
 
-  // Fetch subscribers count (creator_subscriptions tracks plan-level, not per-user)
+  // Fetch subscribers count
   const { count: subscribersCount } = await supabase
     .from('creator_subscriptions')
     .select('id', { count: 'exact', head: true })
-    .eq('creator_id', profileId)
     .eq('status', 'active')
 
-  // TODO: per-user subscription check not yet supported by DB schema
-  const isSubscribed = false
+  // Check if current user has an active subscription
+  let isSubscribed = false
+  if (userId) {
+    const { count } = await supabase
+      .from('creator_subscriptions')
+      .select('id', { count: 'exact', head: true })
+      .eq('creator_id', userId)
+      .eq('status', 'active')
+    isSubscribed = (count ?? 0) > 0
+  }
 
   // Mapear descricao da RPC para CreatorDescription
   const desc = d.descricao
@@ -432,12 +442,28 @@ export default function CreatorProfilePage() {
   const subscribeMutation = useMutation({
     mutationFn: async () => {
       if (!currentUser?.id || !profileId) return
+
+      // Fetch the first active subscription plan to get the Stripe price ID
+      const { data: plans } = await supabase
+        .from('subscription_plans')
+        .select('stripe_price_id')
+        .eq('is_active', true)
+        .order('price_monthly', { ascending: true })
+        .limit(1)
+
+      const priceId = plans?.[0]?.stripe_price_id
+      if (!priceId) throw new Error('Nenhum plano de assinatura disponível')
+
       const { data, error } = await supabase.functions.invoke('create-checkout-subscription-stripe', {
-        body: { creator_id: profileId },
+        body: {
+          price_id: priceId,
+          success_url: `${APP_URL}/creator/${profileId}`,
+          cancel_url: `${APP_URL}/creator/${profileId}`,
+        },
       })
       if (error) throw error
-      if (data?.url) {
-        window.location.href = data.url
+      if (data?.checkout_url || data?.url) {
+        window.location.href = data.checkout_url || data.url
       }
     },
   })
@@ -518,12 +544,19 @@ export default function CreatorProfilePage() {
   const handleBuyPack = async (pack: PackInfo) => {
     setSelectedPack(null)
     try {
-      const { data, error } = await supabase.functions.invoke('create-stripe-pack', {
-        body: { pack_id: pack.id },
+      const { data, error } = await supabase.functions.invoke('create-stripe-checkout', {
+        body: {
+          creator_id: pack.creator_id,
+          product_id: pack.id,
+          stripe_price_id: pack.stripe_price_id,
+          product_type: 'pack',
+          success_url: `${APP_URL}/purchases`,
+          cancel_url: `${APP_URL}/creator/${pack.creator_id}`,
+        },
       })
       if (error) throw error
-      if (data?.url) {
-        window.location.href = data.url
+      if (data?.checkoutUrl) {
+        window.location.href = data.checkoutUrl
       }
     } catch (err) {
       console.error('Erro ao criar checkout do pack:', err)
@@ -537,12 +570,19 @@ export default function CreatorProfilePage() {
       return
     }
     try {
-      const { data, error } = await supabase.functions.invoke('create-stripe-live-ticket', {
-        body: { live_id: live.id },
+      const { data, error } = await supabase.functions.invoke('create-stripe-checkout', {
+        body: {
+          creator_id: live.creator_id,
+          product_id: live.id,
+          stripe_price_id: live.stripe_price_id,
+          product_type: 'live_ticket',
+          success_url: `${APP_URL}/lives/${live.id}`,
+          cancel_url: `${APP_URL}/creator/${live.creator_id}`,
+        },
       })
       if (error) throw error
-      if (data?.url) {
-        window.location.href = data.url
+      if (data?.checkoutUrl) {
+        window.location.href = data.checkoutUrl
       }
     } catch (err) {
       console.error('Erro ao criar checkout da live:', err)
@@ -555,7 +595,7 @@ export default function CreatorProfilePage() {
   }
 
   return (
-    <div className="flex flex-col bg-[hsl(var(--background))] min-h-screen pb-20 relative max-w-4xl mx-auto w-full">
+    <div className="flex flex-col bg-[hsl(var(--background))] min-h-screen pb-20 relative">
 
       {/* ── Header bar ──────────────────────────────────────────────────────── */}
       <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-4 pt-safe pt-4">
@@ -627,7 +667,7 @@ export default function CreatorProfilePage() {
       </div>
 
       {/* ── Avatar + action buttons ──────────────────────────────────────────── */}
-      <div className="px-4 -mt-14 flex items-end justify-between mb-4">
+      <div className="px-4 -mt-14 flex items-end justify-between mb-4 max-w-4xl mx-auto w-full">
         {/* Avatar */}
         <div className="relative">
           <div className="w-24 h-24 rounded-full border-4 border-[hsl(var(--background))] overflow-hidden bg-[hsl(var(--secondary))] shadow-lg">
@@ -694,7 +734,7 @@ export default function CreatorProfilePage() {
       </div>
 
       {/* ── Profile info ─────────────────────────────────────────────────────── */}
-      <div className="px-4 mb-5">
+      <div className="px-4 mb-5 max-w-4xl mx-auto w-full">
         <h1 className="text-xl font-bold text-[hsl(var(--foreground))] leading-tight">
           {creator.nome}
         </h1>
@@ -730,7 +770,7 @@ export default function CreatorProfilePage() {
 
       {/* ── Capabilities ─────────────────────────────────────────────────────── */}
       {(creator.vende_conteudo || creator.faz_chamada_video || creator.faz_encontro_presencial) && (
-        <div className="px-4 mb-5">
+        <div className="px-4 mb-5 max-w-4xl mx-auto w-full">
           <div className="flex flex-col gap-2">
             {creator.vende_conteudo && (
               <button
@@ -792,7 +832,7 @@ export default function CreatorProfilePage() {
 
       {/* ── Packs section ────────────────────────────────────────────────────── */}
       {packs.length > 0 && (
-        <div className="mb-6">
+        <div className="mb-6 max-w-4xl mx-auto w-full">
           <div className="flex items-center justify-between px-4 mb-3">
             <h2 className="text-base font-bold text-[hsl(var(--foreground))]">Pacotes</h2>
             {packs.length > 3 && (
@@ -818,7 +858,7 @@ export default function CreatorProfilePage() {
 
       {/* ── Upcoming events ──────────────────────────────────────────────────── */}
       {(scheduledLives.length > 0 || activeLive) && (
-        <div className="px-4 mb-6">
+        <div className="px-4 mb-6 max-w-4xl mx-auto w-full">
           <h2 className="text-base font-bold text-[hsl(var(--foreground))] mb-3">
             {activeLive ? 'Ao vivo agora' : 'Próximos eventos'}
           </h2>
@@ -875,7 +915,7 @@ export default function CreatorProfilePage() {
 
       {/* ── Photos section ───────────────────────────────────────────────────── */}
       {photos.length > 0 && (
-        <div className="px-4 mb-6">
+        <div className="px-4 mb-6 max-w-4xl mx-auto w-full">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-base font-bold text-[hsl(var(--foreground))]">Fotos</h2>
             {photos.length > 6 && (
@@ -887,7 +927,7 @@ export default function CreatorProfilePage() {
               </button>
             )}
           </div>
-          <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-1 rounded-xl overflow-hidden">
+          <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1 rounded-xl overflow-hidden">
             {displayPhotos.map((img, i) => (
               <div
                 key={img.id}
@@ -933,7 +973,7 @@ export default function CreatorProfilePage() {
 
       {/* ── About section ───────────────────────────────────────────────────── */}
       {(creator.descricao?.bio || (creator.descricao?.tags && creator.descricao.tags.length > 0)) && (
-        <div className="px-4 mb-6">
+        <div className="px-4 mb-6 max-w-4xl mx-auto w-full">
           <h2 className="text-base font-bold text-[hsl(var(--foreground))] mb-3">Sobre</h2>
           <div className="p-4 rounded-xl bg-[hsl(var(--card))] border border-[hsl(var(--border))]">
             {creator.descricao?.bio && (

@@ -18,14 +18,14 @@ interface PackPurchase {
   id: string
   pack_id: string
   user_id: string
-  created_at: string
-  amount_paid: number
+  purchased_at: string | null
+  purchase_price: number
   packs: {
     id: string
     title: string
-    cover_url: string | null
+    cover_image_url: string | null
     price: number
-    creator_id: string
+    profile_id: string
   } | null
 }
 
@@ -33,14 +33,14 @@ interface LiveTicket {
   id: string
   live_stream_id: string
   user_id: string
-  created_at: string
-  amount_paid: number
+  purchased_at: string | null
+  purchase_price: number
   live_streams: {
     id: string
     title: string
-    thumbnail_url: string | null
-    scheduled_at: string
-    price: number | null
+    cover_image_url: string | null
+    scheduled_start_time: string
+    ticket_price: number | null
     status: 'scheduled' | 'live' | 'ended'
   } | null
 }
@@ -48,12 +48,11 @@ interface LiveTicket {
 interface CallPurchase {
   id: string
   creator_id: string
-  client_id: string
-  scheduled_at: string
-  duration_minutes: number
-  price: number
+  user_id: string
+  scheduled_start_time: string
+  scheduled_duration_minutes: number
+  call_price: number
   status: 'pending' | 'confirmed' | 'completed' | 'cancelled'
-  notes: string | null
   profiles: {
     id: string
     full_name: string | null
@@ -73,21 +72,21 @@ async function fetchPurchases(userId: string): Promise<PurchasesData> {
   const [packsRes, livesRes, callsRes] = await Promise.all([
     supabase
       .from('pack_purchases')
-      .select('*, packs(id, title, cover_url, price, creator_id)')
+      .select('*, packs(id, title, cover_image_url, price, profile_id)')
       .eq('user_id', userId)
-      .order('created_at', { ascending: false }),
+      .order('purchased_at', { ascending: false }),
 
     supabase
       .from('live_stream_tickets')
-      .select('*, live_streams(id, title, thumbnail_url, scheduled_at, price, status)')
+      .select('*, live_streams(id, title, cover_image_url, scheduled_start_time, ticket_price, status)')
       .eq('user_id', userId)
-      .order('created_at', { ascending: false }),
+      .order('purchased_at', { ascending: false }),
 
     supabase
       .from('one_on_one_calls')
       .select('*, profiles!creator_id(id, full_name, avatar_url)')
-      .eq('client_id', userId)
-      .order('scheduled_at', { ascending: false }),
+      .eq('user_id', userId)
+      .order('scheduled_start_time', { ascending: false }),
   ])
 
   return {
@@ -182,9 +181,9 @@ function PackList({ packs }: { packs: PackPurchase[] }) {
           >
             {/* Thumbnail */}
             <div className="w-14 h-14 rounded-lg overflow-hidden bg-[hsl(var(--secondary))] shrink-0 flex items-center justify-center">
-              {pack?.cover_url ? (
+              {pack?.cover_image_url ? (
                 <img
-                  src={pack.cover_url}
+                  src={pack.cover_image_url}
                   alt={pack.title}
                   className="w-full h-full object-cover"
                 />
@@ -199,14 +198,14 @@ function PackList({ packs }: { packs: PackPurchase[] }) {
                 {pack?.title ?? 'Pack removido'}
               </p>
               <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
-                {formatDate(purchase.created_at)}
+                {purchase.purchased_at ? formatDate(purchase.purchased_at) : '—'}
               </p>
             </div>
 
             {/* Valor */}
             <div className="text-right shrink-0">
               <p className="text-sm font-bold text-[hsl(var(--primary))]">
-                {formatCurrency(purchase.amount_paid)}
+                {formatCurrency(purchase.purchase_price)}
               </p>
             </div>
           </div>
@@ -232,9 +231,9 @@ function LiveList({ lives }: { lives: LiveTicket[] }) {
           >
             {/* Thumbnail */}
             <div className="w-14 h-14 rounded-lg overflow-hidden bg-[hsl(var(--secondary))] shrink-0 flex items-center justify-center">
-              {live?.thumbnail_url ? (
+              {live?.cover_image_url ? (
                 <img
-                  src={live.thumbnail_url}
+                  src={live.cover_image_url}
                   alt={live.title}
                   className="w-full h-full object-cover"
                 />
@@ -249,7 +248,7 @@ function LiveList({ lives }: { lives: LiveTicket[] }) {
                 {live?.title ?? 'Live removida'}
               </p>
               <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
-                {live?.scheduled_at ? formatDate(live.scheduled_at) : '—'}
+                {live?.scheduled_start_time ? formatDate(live.scheduled_start_time) : '—'}
               </p>
               {live?.status && (
                 <span
@@ -263,7 +262,7 @@ function LiveList({ lives }: { lives: LiveTicket[] }) {
             {/* Valor */}
             <div className="text-right shrink-0">
               <p className="text-sm font-bold text-[hsl(var(--primary))]">
-                {ticket.amount_paid ? formatCurrency(ticket.amount_paid) : 'Grátis'}
+                {ticket.purchase_price ? formatCurrency(ticket.purchase_price) : 'Grátis'}
               </p>
             </div>
           </div>
@@ -306,7 +305,7 @@ function CallList({ calls }: { calls: CallPurchase[] }) {
                 {creator?.full_name ?? 'Creator'}
               </p>
               <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
-                {formatDate(call.scheduled_at)} · {call.duration_minutes} min
+                {formatDate(call.scheduled_start_time)} · {call.scheduled_duration_minutes} min
               </p>
               <span
                 className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded-full mt-1 ${callStatusClass(call.status)}`}
@@ -318,7 +317,7 @@ function CallList({ calls }: { calls: CallPurchase[] }) {
             {/* Valor */}
             <div className="text-right shrink-0">
               <p className="text-sm font-bold text-[hsl(var(--primary))]">
-                {formatCurrency(call.price)}
+                {formatCurrency(call.call_price)}
               </p>
             </div>
           </div>
@@ -352,7 +351,8 @@ export default function PurchasesPage() {
     <div className="flex flex-col min-h-full bg-[hsl(var(--background))]">
 
       {/* Header */}
-      <header className="sticky top-0 z-10 bg-[hsl(var(--background))] border-b border-[hsl(var(--border))] px-4 pt-4 pb-0">
+      <header className="sticky top-0 z-10 bg-[hsl(var(--background))] border-b border-[hsl(var(--border))]">
+        <div className="max-w-3xl mx-auto px-4 pt-4 pb-0">
         <div className="relative flex items-center justify-center h-7 mb-3">
           <button
             onClick={() => navigate(-1)}
@@ -392,6 +392,7 @@ export default function PurchasesPage() {
             </button>
           ))}
         </div>
+        </div>
       </header>
 
       {/* Loading */}
@@ -412,7 +413,7 @@ export default function PurchasesPage() {
 
       {/* Content */}
       {!isLoading && !isError && data && (
-        <main className="flex-1 px-4 py-4">
+        <main className="flex-1 px-4 py-4 max-w-3xl mx-auto w-full">
           {activeTab === 'packs' && <PackList packs={data.packs} />}
           {activeTab === 'lives' && <LiveList lives={data.lives} />}
           {activeTab === 'calls' && <CallList calls={data.calls} />}

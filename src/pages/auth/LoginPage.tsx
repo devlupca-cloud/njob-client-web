@@ -6,6 +6,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { AuthInput } from '@/components/ui/AuthInput'
 import Logo from '@/components/ui/Logo'
+import { useToast } from '@/components/ui/Toast'
 
 const schema = z.object({
   email: z
@@ -24,7 +25,8 @@ export default function LoginPage() {
   const [searchParams] = useSearchParams()
   const prefillEmail = searchParams.get('email') ?? ''
   const { signIn } = useAuth()
-  const [serverError, setServerError] = useState<string | null>(null)
+  const { toast } = useToast()
+  const [rememberMe, setRememberMe] = useState(false)
 
   const {
     register,
@@ -37,7 +39,6 @@ export default function LoginPage() {
   })
 
   const onSubmit = async (data: FormData) => {
-    setServerError(null)
     try {
       await signIn(data.email, data.password)
       navigate('/home', { replace: true })
@@ -51,9 +52,9 @@ export default function LoginPage() {
         message.toLowerCase().includes('email') ||
         message.toLowerCase().includes('user')
       ) {
-        setServerError('E-mail ou senha incorretos.')
+        toast({ title: 'E-mail ou senha incorretos.', type: 'error' })
       } else {
-        setServerError(message)
+        toast({ title: message, type: 'error' })
       }
     }
   }
@@ -93,7 +94,28 @@ export default function LoginPage() {
           />
 
           {/* Remember me + Forgot password */}
-          <div className="flex items-center justify-end">
+          <div className="flex items-center justify-between">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <button
+                type="button"
+                role="checkbox"
+                aria-checked={rememberMe}
+                onClick={() => setRememberMe((v) => !v)}
+                className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                  rememberMe
+                    ? 'bg-[hsl(var(--primary))] border-[hsl(var(--primary))]'
+                    : 'border-[hsl(var(--border))] bg-transparent'
+                }`}
+              >
+                {rememberMe && (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                )}
+              </button>
+              <span className="text-sm text-[hsl(var(--muted-foreground))]">Lembrar-me</span>
+            </label>
+
             <button
               type="button"
               onClick={() => {
@@ -105,29 +127,6 @@ export default function LoginPage() {
               Esqueci a senha
             </button>
           </div>
-
-          {/* Server error */}
-          {serverError && (
-            <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/30 rounded-[var(--radius)] px-4 py-3">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="text-red-400 mt-0.5 shrink-0"
-              >
-                <circle cx="12" cy="12" r="10" />
-                <line x1="12" y1="8" x2="12" y2="12" />
-                <line x1="12" y1="16" x2="12.01" y2="16" />
-              </svg>
-              <p className="text-sm text-red-400">{serverError}</p>
-            </div>
-          )}
 
           {/* Submit */}
           <button

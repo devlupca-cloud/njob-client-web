@@ -95,12 +95,8 @@ export default function ProfilePage() {
   }
 
   const handleLogout = async () => {
-    try {
-      await signOut()
-      navigate('/login', { replace: true })
-    } catch (err) {
-      console.error('Erro ao fazer logout:', err)
-    }
+    await signOut()
+    navigate('/login', { replace: true })
   }
 
   const displayName = profile?.full_name ?? user?.email?.split('@')[0] ?? 'Usuário'
@@ -108,15 +104,15 @@ export default function ProfilePage() {
   const avatarUrl = !avatarError && profile?.avatar_url ? profile.avatar_url : null
 
   return (
-    <div className="min-h-screen bg-[hsl(var(--background))] pb-20 max-w-2xl mx-auto w-full">
+    <div className="min-h-screen bg-[hsl(var(--background))] pb-20">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-[hsl(var(--background))] border-b border-[hsl(var(--border))]">
-        <div className="flex items-center justify-center h-14 px-4">
+        <div className="flex items-center justify-center h-14 px-4 max-w-2xl mx-auto">
           <h1 className="text-base font-semibold text-[hsl(var(--foreground))]">Perfil</h1>
         </div>
       </div>
 
-      <div className="px-4 pt-8 pb-4 flex flex-col items-center gap-3">
+      <div className="px-4 pt-8 pb-4 flex flex-col items-center gap-3 max-w-2xl mx-auto">
         {/* Avatar */}
         <div className="relative">
           <button
@@ -178,7 +174,7 @@ export default function ProfilePage() {
       </div>
 
       {/* Seções de navegação */}
-      <div className="px-4 mt-4">
+      <div className="px-4 mt-4 max-w-2xl mx-auto">
         <div className="bg-[hsl(var(--card))] rounded-2xl overflow-hidden border border-[hsl(var(--border))]">
           {sections.map(({ icon: Icon, label, path }, index) => (
             <div key={path}>
@@ -199,7 +195,7 @@ export default function ProfilePage() {
       </div>
 
       {/* Botão de logout */}
-      <div className="px-4 mt-4">
+      <div className="px-4 mt-4 max-w-2xl mx-auto">
         <div className="bg-[hsl(var(--card))] rounded-2xl overflow-hidden border border-[hsl(var(--border))]">
           <button
             onClick={handleLogout}

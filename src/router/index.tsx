@@ -38,25 +38,12 @@ import AppShell from '@/components/layout/AppShell'
 
 function AuthGuard() {
   const session = useAuthStore((s) => s.session)
-  const isLoading = useAuthStore((s) => s.isLoading)
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-[hsl(var(--background))]">
-        <div className="w-8 h-8 border-2 border-[hsl(var(--primary))] border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
-  }
-
   if (!session) return <Navigate to="/login" replace />
   return <Outlet />
 }
 
 function GuestGuard() {
   const session = useAuthStore((s) => s.session)
-  const isLoading = useAuthStore((s) => s.isLoading)
-
-  if (isLoading) return null
   if (session) return <Navigate to="/home" replace />
   return <Outlet />
 }

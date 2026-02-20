@@ -53,7 +53,7 @@ export default function PersonalInfoPage() {
     <div className="min-h-screen bg-[hsl(var(--background))] pb-20">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-[hsl(var(--background))] border-b border-[hsl(var(--border))]">
-        <div className="relative flex items-center justify-center h-14 px-4">
+        <div className="relative flex items-center justify-center h-14 px-4 max-w-2xl mx-auto">
           <button
             onClick={() => navigate(-1)}
             className="absolute left-4 flex items-center justify-center w-8 h-8 rounded-full hover:bg-[hsl(var(--card))] transition-colors"
@@ -68,7 +68,7 @@ export default function PersonalInfoPage() {
       </div>
 
       {/* Avatar e nome no topo */}
-      <div className="px-4 pt-6 pb-4 flex flex-col items-center gap-2">
+      <div className="px-4 pt-6 pb-4 flex flex-col items-center gap-2 max-w-2xl mx-auto">
         <div className="w-20 h-20 rounded-full overflow-hidden bg-[hsl(var(--card))] border-2 border-[hsl(var(--border))]">
           {profile?.avatar_url ? (
             <img
@@ -88,7 +88,7 @@ export default function PersonalInfoPage() {
       </div>
 
       {/* Lista de informações */}
-      <div className="px-4 mt-2">
+      <div className="px-4 mt-2 max-w-2xl mx-auto">
         <div className="bg-[hsl(var(--card))] rounded-2xl overflow-hidden border border-[hsl(var(--border))]">
           {infoItems.map(({ icon: Icon, label, getValue, path }, index) => {
             const value = getValue(profile, userEmail)

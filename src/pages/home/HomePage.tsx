@@ -211,7 +211,8 @@ export default function HomePage() {
     <div className="flex flex-col min-h-full bg-[hsl(var(--background))]">
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-10 bg-[hsl(var(--background))] border-b border-[hsl(var(--border))] px-4 pt-4 pb-3 flex flex-col gap-3">
+      <header className="sticky top-0 z-10 bg-[hsl(var(--background))] border-b border-[hsl(var(--border))]">
+        <div className="max-w-7xl mx-auto px-4 pt-4 pb-3 flex flex-col gap-3">
 
         {/* Logo + notification */}
         <div className="flex items-center justify-between">
@@ -262,10 +263,11 @@ export default function HomePage() {
             />
           ))}
         </div>
+        </div>
       </header>
 
       {/* ── Content ─────────────────────────────────────────────────────────── */}
-      <main className="flex-1">
+      <main className="flex-1 max-w-7xl mx-auto w-full">
 
         {/* Loading */}
         {isLoading && <SkeletonGrid />}

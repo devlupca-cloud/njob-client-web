@@ -9,10 +9,11 @@ interface PageHeaderProps {
 export default function PageHeader({ title, onBack, rightAction }: PageHeaderProps) {
   return (
     <header
-      className="sticky top-0 z-40 h-14 flex items-center px-4
+      className="sticky top-0 z-40
         bg-[hsl(var(--card)/0.85)] backdrop-blur-md
         border-b border-[hsl(var(--border))]"
     >
+      <div className="h-14 flex items-center px-4 max-w-3xl mx-auto">
       {/* Left slot */}
       <div className="w-10 flex items-center justify-start shrink-0">
         {onBack && (
@@ -37,6 +38,7 @@ export default function PageHeader({ title, onBack, rightAction }: PageHeaderPro
       {/* Right slot */}
       <div className="w-10 flex items-center justify-end shrink-0">
         {rightAction ?? null}
+      </div>
       </div>
     </header>
   )

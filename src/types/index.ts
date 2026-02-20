@@ -124,6 +124,8 @@ export interface PackInfo {
   price: number
   cover_url: string | null
   items_count: number
+  stripe_price_id: string | null
+  creator_id: string
 }
 
 // ─── Coupons ─────────────────────────────────────────────────────────────────
@@ -181,6 +183,8 @@ export interface LiveStream {
   cover_image_url: string | null
   estimated_duration_minutes: number | null
   participant_limit: number | null
+  stripe_product_id: string | null
+  stripe_price_id: string | null
 }
 
 // ─── Calls ───────────────────────────────────────────────────────────────────
@@ -200,12 +204,19 @@ export interface OneOnOneCall {
 
 export interface SubscriptionPlan {
   id: string
-  creator_id: string
   name: string
-  price: number
-  interval: 'monthly' | 'yearly'
-  benefits: string[]
+  description: string | null
+  price_monthly: number | null
+  price_yearly: number | null
+  currency: string
+  features: string[] | null
   is_active: boolean
+  stripe_price_id: string | null
+  // Compat aliases used by some pages
+  creator_id?: string
+  price?: number
+  interval?: 'monthly' | 'yearly'
+  benefits?: string[]
 }
 
 export interface CreatorSubscription {

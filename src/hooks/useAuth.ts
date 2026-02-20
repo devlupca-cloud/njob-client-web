@@ -1,35 +1,12 @@
-import { useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 
 export function useAuth() {
-  const { session, user, profile, isLoading, setSession, setProfile, setLoading, clear } =
+  const { session, user, profile, isLoading, clear } =
     useAuthStore()
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      setLoading(false)
-    })
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        setSession(session)
-        if (session?.user) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .single()
-          setProfile(profile)
-        } else {
-          clear()
-        }
-      }
-    )
-
-    return () => subscription.unsubscribe()
-  }, [])
+  // Auth initialization is handled by AuthProvider.
+  // This hook only exposes state + auth methods.
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
@@ -56,9 +33,11 @@ export function useAuth() {
     }
   }
 
-  const signOut = async () => {
-    await supabase.auth.signOut()
+  const signOut = () => {
+    // Clear local state immediately (don't wait for Supabase)
     clear()
+    // Fire-and-forget: tell Supabase to invalidate the session
+    supabase.auth.signOut().catch(() => {})
   }
 
   const sendPasswordResetOtp = async (email: string) => {

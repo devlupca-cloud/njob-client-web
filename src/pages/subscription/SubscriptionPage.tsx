@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft, Check, Star, Zap, Crown } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
+import { APP_URL } from '@/lib/config'
 import type { SubscriptionPlan, CreatorSubscription } from '@/types'
 
 
@@ -17,11 +18,11 @@ async function fetchPlansAndSubscription(userId: string): Promise<{
       .from('subscription_plans')
       .select('*')
       .eq('is_active', true)
-      .order('price', { ascending: true }),
+      .order('price_monthly', { ascending: true }),
     supabase
       .from('creator_subscriptions')
       .select('*')
-      .eq('client_id', userId)
+      .eq('creator_id', userId)
       .eq('status', 'active'),
   ])
 
@@ -119,7 +120,7 @@ function PlanCard({
         {/* Preço */}
         <div>
           <span className="text-2xl font-black text-[hsl(var(--primary))]">
-            {formatPrice(plan.price, plan.interval)}
+            {formatPrice(plan.price_monthly ?? plan.price ?? 0, 'monthly')}
           </span>
         </div>
 
@@ -181,7 +182,7 @@ function ActiveSubscriptionCard({
       <div className="px-4 py-4 flex flex-col gap-1.5">
         <p className="text-base font-bold text-[hsl(var(--foreground))]">{plan.name}</p>
         <p className="text-sm text-[hsl(var(--muted-foreground))]">
-          {formatPrice(plan.price, plan.interval)}
+          {formatPrice(plan.price_monthly ?? plan.price ?? 0, 'monthly')}
         </p>
         {sub.expires_at && (
           <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
@@ -218,7 +219,11 @@ export default function SubscriptionPage() {
   async function handleSubscribe(plan: SubscriptionPlan) {
     try {
       const { data, error } = await supabase.functions.invoke('create-checkout-subscription-stripe', {
-        body: { plan_id: plan.id, creator_id: plan.creator_id },
+        body: {
+          price_id: plan.stripe_price_id,
+          success_url: `${APP_URL}/subscription`,
+          cancel_url: `${APP_URL}/subscription`,
+        },
       })
       if (error) throw error
       if (data?.url) {
@@ -233,8 +238,8 @@ export default function SubscriptionPage() {
     <div className="flex flex-col min-h-full bg-[hsl(var(--background))]">
 
       {/* Header */}
-      <header className="sticky top-0 z-10 bg-[hsl(var(--background))] border-b border-[hsl(var(--border))] px-4 pt-4 pb-3">
-        <div className="relative flex items-center justify-center h-7">
+      <header className="sticky top-0 z-10 bg-[hsl(var(--background))] border-b border-[hsl(var(--border))]">
+        <div className="relative flex items-center justify-center h-7 max-w-3xl mx-auto px-4 pt-4 pb-3">
           <button
             onClick={() => navigate(-1)}
             className="absolute left-0 w-7 h-7 flex items-center justify-center rounded-full bg-[hsl(var(--secondary))] text-[hsl(var(--foreground))]"
@@ -264,7 +269,7 @@ export default function SubscriptionPage() {
 
       {/* Content */}
       {!isLoading && !isError && (
-        <main className="flex-1 px-4 py-6 flex flex-col gap-6">
+        <main className="flex-1 px-4 py-6 flex flex-col gap-6 max-w-3xl mx-auto w-full">
 
           {/* Assinatura atual */}
           {activeSubscriptions.length > 0 && (
@@ -295,7 +300,7 @@ export default function SubscriptionPage() {
                 </p>
               </div>
             ) : (
-              <div className="flex flex-col gap-4">
+              <div className="flex flex-col md:grid md:grid-cols-3 gap-4">
                 {plans.map((plan, index) => (
                   <PlanCard
                     key={plan.id}

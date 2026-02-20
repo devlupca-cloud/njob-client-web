@@ -411,7 +411,8 @@ export default function ChatPage() {
       style={{ height: 'calc(100vh - 4rem)' }}
     >
       {/* Header */}
-      <div className="shrink-0 flex items-center gap-3 px-4 py-3 bg-[hsl(var(--background))] border-b border-[hsl(var(--border))]">
+      <div className="shrink-0 bg-[hsl(var(--background))] border-b border-[hsl(var(--border))]">
+      <div className="flex items-center gap-3 px-4 py-3 max-w-3xl mx-auto">
         <button
           onClick={() => navigate('/chat')}
           className="p-1.5 -ml-1.5 text-[hsl(var(--foreground))] rounded-full hover:bg-[hsl(var(--card))] transition-colors"
@@ -431,9 +432,11 @@ export default function ChatPage() {
           )}
         </div>
       </div>
+      </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 bg-[hsl(var(--card)/0.3)]">
+      <div className="flex-1 overflow-y-auto bg-[hsl(var(--card)/0.3)]">
+      <div className="max-w-3xl mx-auto px-4 py-3">
         {isLoading ? (
           /* Loading skeleton */
           <div className="flex flex-col gap-4">
@@ -479,9 +482,11 @@ export default function ChatPage() {
         )}
         <div ref={bottomRef} />
       </div>
+      </div>
 
       {/* Input bar */}
-      <div className="shrink-0 flex items-end gap-3 px-4 py-3 bg-[hsl(var(--background))] border-t border-[hsl(var(--border))]">
+      <div className="shrink-0 bg-[hsl(var(--background))] border-t border-[hsl(var(--border))]">
+      <div className="flex items-end gap-3 px-4 py-3 max-w-3xl mx-auto">
         <div className="flex-1 flex items-end bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-2xl px-4 py-2.5 min-h-[44px]">
           <textarea
             ref={textareaRef}
@@ -520,6 +525,7 @@ export default function ChatPage() {
             />
           )}
         </button>
+      </div>
       </div>
     </div>
   )

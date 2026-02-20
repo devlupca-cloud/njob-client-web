@@ -6,9 +6,7 @@ export default function AppShell() {
     <div className="flex flex-col md:flex-row min-h-screen bg-[hsl(var(--background))]">
       <NavBar />
       <main className="flex-1 overflow-y-auto pb-20 md:pb-0 md:ml-20">
-        <div className="max-w-6xl mx-auto">
-          <Outlet />
-        </div>
+        <Outlet />
       </main>
     </div>
   )

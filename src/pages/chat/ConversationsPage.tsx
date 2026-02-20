@@ -150,10 +150,10 @@ export default function ConversationsPage() {
   }
 
   return (
-    <div className="flex flex-col min-h-[calc(100vh-4rem)] bg-[hsl(var(--background))] max-w-3xl mx-auto w-full">
+    <div className="flex flex-col min-h-[calc(100vh-4rem)] bg-[hsl(var(--background))]">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-[hsl(var(--background))] border-b border-[hsl(var(--border))]">
-        <div className="flex items-center justify-between px-4 py-4">
+        <div className="flex items-center justify-between px-4 py-4 max-w-3xl mx-auto">
           {isSearchOpen ? (
             /* Search bar expanded */
             <div className="flex items-center gap-3 flex-1">
@@ -202,7 +202,7 @@ export default function ConversationsPage() {
       </div>
 
       {/* Content */}
-      <div className="flex-1">
+      <div className="flex-1 max-w-3xl mx-auto w-full">
         {isLoading ? (
           /* Skeletons */
           <div className="divide-y divide-[hsl(var(--border))]">

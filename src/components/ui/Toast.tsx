@@ -159,17 +159,19 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       {children}
 
       {/* Toast viewport - fixed top, centered */}
-      <div
-        aria-label="Notificações"
-        className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999]
-          flex flex-col gap-2 w-[calc(100%-2rem)] max-w-sm pointer-events-none"
-      >
-        {toasts.map((item) => (
-          <div key={item.id} className="pointer-events-auto">
-            <ToastCard item={item} onRemove={remove} />
-          </div>
-        ))}
-      </div>
+      {toasts.length > 0 && (
+        <div
+          aria-label="Notificações"
+          className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999]
+            flex flex-col gap-2 w-[calc(100%-2rem)] max-w-sm pointer-events-none"
+        >
+          {toasts.map((item) => (
+            <div key={item.id} className="pointer-events-auto">
+              <ToastCard item={item} onRemove={remove} />
+            </div>
+          ))}
+        </div>
+      )}
     </ToastContext.Provider>
   )
 }

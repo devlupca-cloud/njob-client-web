@@ -92,7 +92,7 @@ async function fetchCreatorContent(
     const { data: purchasesData } = await supabase
       .from('pack_purchases')
       .select('pack_id')
-      .eq('client_id', userId)
+      .eq('user_id', userId)
       .eq('status', 'completed')
 
     purchasedPackIds = new Set((purchasesData ?? []).map((p: any) => p.pack_id))
@@ -492,7 +492,7 @@ export default function ContentPage() {
 
       {/* ── Header ──────────────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-10 bg-[hsl(var(--background))] border-b border-[hsl(var(--border))]">
-        <div className="flex items-center gap-3 px-4 py-4">
+        <div className="flex items-center gap-3 px-4 py-4 max-w-4xl mx-auto">
           <button
             onClick={() => navigate(-1)}
             className="w-9 h-9 flex items-center justify-center rounded-full bg-[hsl(var(--secondary))]"
@@ -510,7 +510,7 @@ export default function ContentPage() {
 
         {/* Filters */}
         {!isLoading && (
-          <div className="flex gap-2 overflow-x-auto scrollbar-none px-4 pb-3">
+          <div className="flex gap-2 overflow-x-auto scrollbar-none px-4 pb-3 max-w-4xl mx-auto">
             {FILTERS.map((f) => (
               <FilterPill
                 key={f.key}
@@ -526,6 +526,7 @@ export default function ContentPage() {
 
       {/* ── Content ─────────────────────────────────────────────────────────── */}
       <main className="flex-1">
+        <div className="max-w-4xl mx-auto">
 
         {/* Loading */}
         {isLoading && (
@@ -549,7 +550,7 @@ export default function ContentPage() {
             {filteredItems.length === 0 ? (
               <EmptyContent filter={activeFilter} />
             ) : (
-              <div className="grid grid-cols-3 gap-0.5">
+              <div className="grid grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-0.5">
                 {filteredItems.map((item) => (
                   <MediaThumb
                     key={item.id}
@@ -561,6 +562,7 @@ export default function ContentPage() {
             )}
           </>
         )}
+        </div>
       </main>
 
       {/* ── Lightbox ────────────────────────────────────────────────────────── */}

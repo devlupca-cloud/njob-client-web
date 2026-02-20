@@ -166,8 +166,8 @@ export default function SavedCardsPage() {
     <div className="flex flex-col min-h-full bg-[hsl(var(--background))]">
 
       {/* Header */}
-      <header className="sticky top-0 z-10 bg-[hsl(var(--background))] border-b border-[hsl(var(--border))] px-4 pt-4 pb-3">
-        <div className="relative flex items-center justify-center h-7">
+      <header className="sticky top-0 z-10 bg-[hsl(var(--background))] border-b border-[hsl(var(--border))]">
+        <div className="relative flex items-center justify-center h-7 max-w-2xl mx-auto px-4 pt-4 pb-3">
           <button
             onClick={() => navigate(-1)}
             className="absolute left-0 w-7 h-7 flex items-center justify-center rounded-full bg-[hsl(var(--secondary))] text-[hsl(var(--foreground))]"
@@ -206,7 +206,7 @@ export default function SavedCardsPage() {
 
       {/* Content */}
       {!isLoading && !isError && (
-        <main className="flex-1 px-4 py-4">
+        <main className="flex-1 px-4 py-4 max-w-2xl mx-auto w-full">
           {!cards || cards.length === 0 ? (
             <EmptyState onAdd={() => navigate('/payments/cards/new')} />
           ) : (

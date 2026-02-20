@@ -352,14 +352,13 @@ export default function NotificationsPage() {
 
   return (
     <div className="min-h-screen bg-[hsl(var(--background))]">
-      {/* Max width wrapper for desktop */}
-      <div className="w-full max-w-lg mx-auto">
         <PageHeader
           title="Notificações"
           onBack={() => navigate(-1)}
           rightAction={rightAction}
         />
 
+        <div className="max-w-3xl mx-auto w-full">
         {isLoading ? (
           <NotificationSkeletonList />
         ) : (
@@ -386,7 +385,7 @@ export default function NotificationsPage() {
             )}
           </>
         )}
-      </div>
+        </div>
     </div>
   )
 }

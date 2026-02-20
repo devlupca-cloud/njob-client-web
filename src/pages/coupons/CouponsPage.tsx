@@ -152,11 +152,11 @@ export default function CouponsPage() {
   })
 
   return (
-    <div className="flex flex-col min-h-full bg-[hsl(var(--background))] max-w-3xl mx-auto w-full">
+    <div className="flex flex-col min-h-full bg-[hsl(var(--background))]">
 
       {/* Header */}
-      <header className="sticky top-0 z-10 bg-[hsl(var(--background))] border-b border-[hsl(var(--border))] px-4 pt-4 pb-3">
-        <div className="relative flex items-center justify-center h-7">
+      <header className="sticky top-0 z-10 bg-[hsl(var(--background))] border-b border-[hsl(var(--border))]">
+        <div className="relative flex items-center justify-center h-7 max-w-3xl mx-auto px-4 pt-4 pb-3">
           <button
             onClick={() => navigate(-1)}
             className="absolute left-0 w-7 h-7 flex items-center justify-center rounded-full bg-[hsl(var(--secondary))] text-[hsl(var(--foreground))]"
@@ -172,7 +172,7 @@ export default function CouponsPage() {
       </header>
 
       {/* Content */}
-      <main className="flex-1 px-4 py-4">
+      <main className="flex-1 px-4 py-4 max-w-3xl mx-auto w-full">
         {isLoading && (
           <div className="grid grid-cols-2 gap-3">
             {Array.from({ length: 4 }).map((_, i) => (
@@ -194,7 +194,7 @@ export default function CouponsPage() {
             {!coupons || coupons.length === 0 ? (
               <EmptyState />
             ) : (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {coupons.map((coupon) => (
                   <CouponCard
                     key={coupon.id}
