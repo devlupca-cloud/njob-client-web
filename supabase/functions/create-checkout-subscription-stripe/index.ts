@@ -33,9 +33,15 @@ serve(async (req)=>{
     const userId = payload?.sub;
     const userEmail = payload?.email;
     if (!userId || !userEmail) throw new Error("Dados do usuário inválidos no token");
-    const { price_id, success_url: custom_success_url, cancel_url: custom_cancel_url } = await req.json();
+    const body = await req.json();
+    const { price_id, success_url: custom_success_url, cancel_url: custom_cancel_url } = body;
+    console.log('[checkout-subscription] body received:', JSON.stringify(body));
     if (!price_id) throw new Error("price_id é obrigatório");
     const defaultUrl = 'https://njob-client-web.vercel.app/';
+    const finalSuccessUrl = custom_success_url || defaultUrl;
+    const finalCancelUrl = custom_cancel_url || defaultUrl;
+    console.log('[checkout-subscription] success_url:', finalSuccessUrl);
+    console.log('[checkout-subscription] cancel_url:', finalCancelUrl);
     const session = await stripe.checkout.sessions.create({
       payment_method_types: [
         'card'
@@ -49,8 +55,8 @@ serve(async (req)=>{
         }
       ],
       client_reference_id: userId,
-      success_url: custom_success_url || defaultUrl,
-      cancel_url: custom_cancel_url || defaultUrl
+      success_url: finalSuccessUrl,
+      cancel_url: finalCancelUrl
     });
     // --- ALTERAÇÃO AQUI ---
     // Agora retornamos a URL completa do checkout em vez do ID da sessão.
