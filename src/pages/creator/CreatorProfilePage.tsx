@@ -72,19 +72,51 @@ async function fetchCreatorProfile(
     p_client_id: userId ?? '00000000-0000-0000-0000-000000000000',
   })
 
-  if (rpcError) throw rpcError
+  if (rpcError) {
+    console.error('[CreatorProfile] RPC error:', rpcError)
+    throw rpcError
+  }
 
   const d = rpcData as any
-  if (!d?.success) throw new Error(d?.message || 'Creator not found')
+  if (!d?.success) {
+    console.error('[CreatorProfile] RPC returned unsuccessful:', d)
+    throw new Error(d?.message || 'Creator not found')
+  }
 
-  // Fetch packs (não vem na RPC)
-  const { data: packsData } = await supabase
-    .from('packs')
-    .select('id, title, description, price, cover_image_url, stripe_price_id, pack_items(id)')
-    .eq('profile_id', profileId)
-    .order('created_at', { ascending: false })
+  // Fetch remaining data in parallel
+  const [packsRes, livesRes, subscribersRes, isSubscribedRes] = await Promise.all([
+    supabase
+      .from('packs')
+      .select('id, title, description, price, cover_image_url, stripe_price_id, pack_items(id)')
+      .eq('profile_id', profileId)
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('live_streams')
+      .select('*')
+      .eq('creator_id', profileId)
+      .in('status', ['scheduled', 'live'])
+      .order('scheduled_start_time', { ascending: true })
+      .limit(5),
+    supabase
+      .from('creator_subscriptions')
+      .select('id', { count: 'exact', head: true })
+      .eq('creator_id', profileId)
+      .eq('status', 'active'),
+    userId
+      ? supabase
+          .from('creator_subscriptions')
+          .select('id', { count: 'exact', head: true })
+          .eq('creator_id', profileId)
+          .eq('client_id', userId)
+          .eq('status', 'active')
+      : Promise.resolve({ count: 0, data: null, error: null }),
+  ])
 
-  const packs: PackInfo[] = (packsData ?? []).map((p: any) => ({
+  if (packsRes.error) console.error('[CreatorProfile] Packs error:', packsRes.error)
+  if (livesRes.error) console.error('[CreatorProfile] Lives error:', livesRes.error)
+  if (subscribersRes.error) console.error('[CreatorProfile] Subscribers error:', subscribersRes.error)
+
+  const packs: PackInfo[] = (packsRes.data ?? []).map((p: any) => ({
     id: p.id,
     title: p.title,
     price: p.price,
@@ -94,33 +126,9 @@ async function fetchCreatorProfile(
     creator_id: profileId,
   }))
 
-  // Fetch lives (não vem na RPC)
-  const { data: livesData } = await supabase
-    .from('live_streams')
-    .select('*')
-    .eq('creator_id', profileId)
-    .in('status', ['scheduled', 'live'])
-    .order('scheduled_start_time', { ascending: true })
-    .limit(5)
-
-  const lives: LiveStream[] = (livesData ?? []) as LiveStream[]
-
-  // Fetch subscribers count
-  const { count: subscribersCount } = await supabase
-    .from('creator_subscriptions')
-    .select('id', { count: 'exact', head: true })
-    .eq('status', 'active')
-
-  // Check if current user has an active subscription
-  let isSubscribed = false
-  if (userId) {
-    const { count } = await supabase
-      .from('creator_subscriptions')
-      .select('id', { count: 'exact', head: true })
-      .eq('creator_id', userId)
-      .eq('status', 'active')
-    isSubscribed = (count ?? 0) > 0
-  }
+  const lives: LiveStream[] = (livesRes.data ?? []) as LiveStream[]
+  const subscribersCount = subscribersRes.count ?? 0
+  const isSubscribed = ((isSubscribedRes as any).count ?? 0) > 0
 
   // Mapear descricao da RPC para CreatorDescription
   const desc = d.descricao
