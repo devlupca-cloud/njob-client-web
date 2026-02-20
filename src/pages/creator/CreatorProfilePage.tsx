@@ -462,16 +462,28 @@ export default function CreatorProfilePage() {
       const priceId = plans?.[0]?.stripe_price_id
       if (!priceId) throw new Error('Nenhum plano de assinatura disponível')
 
+      const successUrl = `${APP_URL}/creator/${profileId}`
+      const cancelUrl = `${APP_URL}/creator/${profileId}`
+      console.log('[Subscribe] APP_URL:', APP_URL)
+      console.log('[Subscribe] success_url:', successUrl)
+      console.log('[Subscribe] price_id:', priceId)
+
       const { data, error } = await supabase.functions.invoke('create-checkout-subscription-stripe', {
         body: {
           price_id: priceId,
-          success_url: `${APP_URL}/creator/${profileId}`,
-          cancel_url: `${APP_URL}/creator/${profileId}`,
+          success_url: successUrl,
+          cancel_url: cancelUrl,
         },
       })
+
+      console.log('[Subscribe] Edge Function response:', JSON.stringify(data))
+      console.log('[Subscribe] Edge Function error:', error)
+
       if (error) throw error
       if (data?.checkout_url || data?.url) {
-        window.location.href = data.checkout_url || data.url
+        const redirectUrl = data.checkout_url || data.url
+        console.log('[Subscribe] Redirecting to:', redirectUrl)
+        window.location.href = redirectUrl
       }
     },
   })
