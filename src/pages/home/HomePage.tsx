@@ -1,7 +1,6 @@
 import { useState, useMemo, useDeferredValue } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Bell, Search, Users } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Search, Users } from 'lucide-react'
 import Logo from '@/components/ui/Logo'
 import { supabase } from '@/lib/supabase'
 import type { Creator } from '@/types'

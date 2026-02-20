@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { Home, MessageCircle, Bell, User, ShoppingBag } from 'lucide-react'
+import { Home, User, ShoppingBag } from 'lucide-react'
 import Logo from '@/components/ui/Logo'
 
 const navItems = [
