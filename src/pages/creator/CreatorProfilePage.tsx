@@ -564,6 +564,12 @@ export default function CreatorProfilePage() {
 
   const handleBuyPack = async (pack: PackInfo) => {
     setSelectedPack(null)
+
+    if (!pack.stripe_price_id) {
+      alert('Este pacote ainda não está disponível para compra. O criador precisa configurar o preço no Stripe.')
+      return
+    }
+
     try {
       const { data, error } = await supabase.functions.invoke('create-stripe-checkout', {
         body: {

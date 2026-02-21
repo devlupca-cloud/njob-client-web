@@ -461,6 +461,13 @@ export default function ContentPage() {
 
   const handleBuy = async () => {
     if (!purchaseItem || !resolvedProfileId) return
+
+    if (!purchaseItem.stripe_price_id) {
+      alert('Este pacote ainda não está disponível para compra. O criador precisa configurar o preço no Stripe.')
+      setPurchaseItem(null)
+      return
+    }
+
     setIsBuying(true)
     try {
       const { data, error } = await supabase.functions.invoke('create-stripe-checkout', {
