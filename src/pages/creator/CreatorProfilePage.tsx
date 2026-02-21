@@ -326,10 +326,12 @@ function PackModal({
   pack,
   onClose,
   onBuy,
+  isBuying,
 }: {
   pack: PackInfo
   onClose: () => void
   onBuy: (pack: PackInfo) => void
+  isBuying: boolean
 }) {
   return (
     <div
@@ -377,14 +379,16 @@ function PackModal({
 
         <button
           onClick={() => onBuy(pack)}
+          disabled={isBuying}
           className="
             w-full flex items-center justify-center gap-2 py-3 rounded-xl
             bg-[hsl(var(--primary))] text-white font-semibold text-sm
             hover:opacity-90 active:scale-[0.98] transition-all duration-150
+            disabled:opacity-60 disabled:cursor-not-allowed
           "
         >
           <Package size={18} />
-          Comprar por {formatPrice(pack.price)}
+          {isBuying ? 'Processando...' : `Comprar por ${formatPrice(pack.price)}`}
         </button>
       </div>
     </div>
@@ -422,6 +426,7 @@ export default function CreatorProfilePage() {
   const [selectedLive, setSelectedLive] = useState<LiveStream | null>(null)
   const [showCallModal, setShowCallModal] = useState(false)
   const [selectedPack, setSelectedPack] = useState<PackInfo | null>(null)
+  const [isBuyingPack, setIsBuyingPack] = useState(false)
   const [showAllPhotos, setShowAllPhotos] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
 
@@ -563,14 +568,17 @@ export default function CreatorProfilePage() {
   }
 
   const handleBuyPack = async (pack: PackInfo) => {
-    setSelectedPack(null)
-
     if (!pack.stripe_price_id) {
       alert('Este pacote ainda não está disponível para compra. O criador precisa configurar o preço no Stripe.')
+      setSelectedPack(null)
       return
     }
 
+    setIsBuyingPack(true)
+
     try {
+      console.log('[BuyPack] Requesting checkout for pack:', pack.id, 'stripe_price_id:', pack.stripe_price_id)
+
       const { data, error } = await supabase.functions.invoke('create-stripe-checkout', {
         body: {
           creator_id: pack.creator_id,
@@ -581,12 +589,29 @@ export default function CreatorProfilePage() {
           cancel_url: `${APP_URL}/creator/${pack.creator_id}`,
         },
       })
+
+      console.log('[BuyPack] Response data:', JSON.stringify(data))
+      console.log('[BuyPack] Response error:', error)
+
       if (error) throw error
-      if (data?.checkoutUrl) {
-        window.location.href = data.checkoutUrl
+
+      // Edge Function may return error in data with success: false
+      if (data?.success === false) {
+        throw new Error(data.error || 'Erro desconhecido ao criar checkout')
       }
-    } catch (err) {
-      console.error('Erro ao criar checkout do pack:', err)
+
+      const checkoutUrl = data?.checkoutUrl || data?.checkout_url || data?.url
+      if (checkoutUrl) {
+        window.location.href = checkoutUrl
+      } else {
+        throw new Error('URL de checkout não retornada pelo servidor')
+      }
+    } catch (err: any) {
+      console.error('[BuyPack] Erro ao criar checkout do pack:', err)
+      alert(`Erro ao processar compra: ${err?.message || 'Tente novamente.'}`)
+    } finally {
+      setIsBuyingPack(false)
+      setSelectedPack(null)
     }
   }
 
@@ -1047,6 +1072,7 @@ export default function CreatorProfilePage() {
           pack={selectedPack}
           onClose={() => setSelectedPack(null)}
           onBuy={handleBuyPack}
+          isBuying={isBuyingPack}
         />
       )}
 
