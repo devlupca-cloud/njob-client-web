@@ -1,6 +1,7 @@
-import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, Check, Star, Zap, Crown } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { ArrowLeft, Check, Star, Zap, Crown, Settings } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { APP_URL } from '@/lib/config'
@@ -167,9 +168,13 @@ function PlanCard({
 function ActiveSubscriptionCard({
   sub,
   plan,
+  onManage,
+  isManaging,
 }: {
   sub: CreatorSubscription
   plan: SubscriptionPlan | undefined
+  onManage: () => void
+  isManaging: boolean
 }) {
   if (!plan) return null
 
@@ -189,7 +194,40 @@ function ActiveSubscriptionCard({
             Renova em {formatDate(sub.expires_at)}
           </p>
         )}
+        <button
+          onClick={onManage}
+          disabled={isManaging}
+          className="mt-3 flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-[hsl(var(--secondary))] text-[hsl(var(--foreground))] text-sm font-semibold hover:bg-[hsl(var(--border))] transition-colors disabled:opacity-50"
+        >
+          {isManaging ? (
+            <div className="w-4 h-4 border-2 border-[hsl(var(--foreground))] border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <Settings size={14} />
+          )}
+          {isManaging ? 'Abrindo...' : 'Gerenciar assinatura'}
+        </button>
       </div>
+    </div>
+  )
+}
+
+// ─── Toast Notification ───────────────────────────────────────────────────────
+
+function Toast({ message, type, onClose }: { message: string; type: 'success' | 'error'; onClose: () => void }) {
+  useEffect(() => {
+    const timer = setTimeout(onClose, 5000)
+    return () => clearTimeout(timer)
+  }, [onClose])
+
+  return (
+    <div
+      className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-3 rounded-xl text-sm font-medium shadow-lg transition-all ${
+        type === 'success'
+          ? 'bg-green-500 text-white'
+          : 'bg-red-500 text-white'
+      }`}
+    >
+      {message}
     </div>
   )
 }
@@ -198,7 +236,11 @@ function ActiveSubscriptionCard({
 
 export default function SubscriptionPage() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const user = useAuthStore((s) => s.user)
+  const queryClient = useQueryClient()
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const [isManaging, setIsManaging] = useState(false)
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['subscription', user?.id],
@@ -206,6 +248,21 @@ export default function SubscriptionPage() {
     enabled: !!user?.id,
     staleTime: 1000 * 60 * 5,
   })
+
+  // Detectar retorno do Stripe checkout
+  useEffect(() => {
+    const sessionId = searchParams.get('session_id')
+    const canceled = searchParams.get('canceled')
+
+    if (sessionId) {
+      setToast({ message: 'Assinatura realizada com sucesso!', type: 'success' })
+      queryClient.invalidateQueries({ queryKey: ['subscription', user?.id] })
+      setSearchParams({}, { replace: true })
+    } else if (canceled === 'true') {
+      setToast({ message: 'Checkout cancelado.', type: 'error' })
+      setSearchParams({}, { replace: true })
+    }
+  }, [searchParams, setSearchParams, queryClient, user?.id])
 
   const plans = data?.plans ?? []
   const activeSubscriptions = data?.activeSubscriptions ?? []
@@ -221,21 +278,47 @@ export default function SubscriptionPage() {
       const { data, error } = await supabase.functions.invoke('create-checkout-subscription-stripe', {
         body: {
           price_id: plan.stripe_price_id,
-          success_url: `${APP_URL}/subscription`,
-          cancel_url: `${APP_URL}/subscription`,
+          success_url: `${APP_URL}/subscription?session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${APP_URL}/subscription?canceled=true`,
         },
       })
       if (error) throw error
-      if (data?.url) {
-        window.location.href = data.url
+      if (data?.checkout_url) {
+        window.location.href = data.checkout_url
       }
     } catch (err) {
       console.error('Erro ao criar checkout de assinatura:', err)
+      setToast({ message: 'Erro ao iniciar checkout. Tente novamente.', type: 'error' })
+    }
+  }
+
+  async function handleManageSubscription() {
+    setIsManaging(true)
+    try {
+      const { data, error } = await supabase.functions.invoke('create-customer-portal-session', {
+        body: {
+          return_url: `${APP_URL}/subscription`,
+        },
+      })
+      if (error) throw error
+      if (data?.portal_url) {
+        window.location.href = data.portal_url
+      }
+    } catch (err) {
+      console.error('Erro ao abrir portal:', err)
+      setToast({ message: 'Erro ao abrir portal de gerenciamento.', type: 'error' })
+    } finally {
+      setIsManaging(false)
     }
   }
 
   return (
     <div className="flex flex-col min-h-full bg-[hsl(var(--background))]">
+
+      {/* Toast */}
+      {toast && (
+        <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+      )}
 
       {/* Header */}
       <header className="sticky top-0 z-10 bg-[hsl(var(--background))] border-b border-[hsl(var(--border))]">
@@ -282,6 +365,8 @@ export default function SubscriptionPage() {
                   key={sub.id}
                   sub={sub}
                   plan={plans.find((p) => p.id === sub.plan_id)}
+                  onManage={handleManageSubscription}
+                  isManaging={isManaging}
                 />
               ))}
             </div>
