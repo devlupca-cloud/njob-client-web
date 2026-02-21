@@ -14,8 +14,9 @@ import {
   Grid3x3,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { APP_URL } from '@/lib/config'
 import { useAuthStore } from '@/store/authStore'
-import type { PackItem, Pack } from '@/types'
+import type { PackItem } from '@/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -25,6 +26,7 @@ interface EnrichedItem extends PackItem {
   pack_id: string
   pack_title: string
   pack_price: number
+  stripe_price_id: string | null
   is_purchased: boolean
 }
 
@@ -69,18 +71,19 @@ async function fetchCreatorContent(
   // Packs with items
   const { data: packsData, error: packsError } = await supabase
     .from('packs')
-    .select('id, title, price, pack_items(*)')
+    .select('id, title, price, stripe_price_id, pack_items(*)')
     .eq('profile_id', profileId)
     .order('created_at', { ascending: false })
 
   if (packsError) throw packsError
 
-  const packs: Pack[] = (packsData ?? []).map((p: any) => ({
+  const packs = (packsData ?? []).map((p: any) => ({
     id: p.id,
     creator_id: profileId,
     title: p.title,
     description: p.description ?? null,
     price: p.price,
+    stripe_price_id: p.stripe_price_id ?? null,
     cover_url: p.cover_image_url ?? null,
     items: p.pack_items ?? [],
     created_at: p.created_at,
@@ -108,6 +111,7 @@ async function fetchCreatorContent(
         pack_id: pack.id,
         pack_title: pack.title,
         pack_price: pack.price,
+        stripe_price_id: pack.stripe_price_id,
         is_purchased: isPurchased,
         is_locked: item.is_locked && !isPurchased,
       })
@@ -456,14 +460,28 @@ export default function ContentPage() {
   }
 
   const handleBuy = async () => {
-    if (!purchaseItem) return
+    if (!purchaseItem || !resolvedProfileId) return
     setIsBuying(true)
     try {
-      // Redirect to checkout
-      setPurchaseItem(null)
-      navigate(`/payments/checkout?type=pack&id=${purchaseItem.pack_id}`)
+      const { data, error } = await supabase.functions.invoke('create-stripe-checkout', {
+        body: {
+          creator_id: resolvedProfileId,
+          product_id: purchaseItem.pack_id,
+          stripe_price_id: purchaseItem.stripe_price_id,
+          product_type: 'pack',
+          success_url: `${APP_URL}/purchases`,
+          cancel_url: `${APP_URL}/creator/${resolvedProfileId}/content`,
+        },
+      })
+      if (error) throw error
+      if (data?.checkoutUrl) {
+        window.location.href = data.checkoutUrl
+      }
+    } catch (err) {
+      console.error('Erro ao criar checkout do pack:', err)
     } finally {
       setIsBuying(false)
+      setPurchaseItem(null)
     }
   }
 

@@ -1,9 +1,9 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.1?target=deno";
-import Stripe from "https://esm.sh/stripe@14?target=deno";
+import Stripe from "https://esm.sh/stripe@17.7.0?target=deno";
 
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, {
-  apiVersion: "2022-11-15",
+  apiVersion: "2024-12-18.acacia",
   httpClient: Stripe.createFetchHttpClient(),
 });
 
@@ -157,25 +157,32 @@ async function handleSubscriptionCheckoutCompleted(session: any) {
   }
 }
 
-async function upsertSubscription(subscription: any, userIdOverride?: string) {
+async function upsertSubscription(subscription: any, clientIdOverride?: string) {
   const stripeCustomerId = typeof subscription.customer === "string"
     ? subscription.customer
     : subscription.customer?.id;
 
-  // Resolver user_id: usar override ou buscar pelo stripe_customer_id
-  let userId = userIdOverride || subscription.metadata?.supabase_user_id;
+  // Resolver client_id (the subscriber/fan): usar override ou metadata ou buscar pelo stripe_customer_id
+  let clientId = clientIdOverride || subscription.metadata?.supabase_user_id;
 
-  if (!userId && stripeCustomerId) {
+  if (!clientId && stripeCustomerId) {
     const { data: profile } = await supabaseAdmin
       .from("profiles")
       .select("id")
       .eq("stripe_customer_id", stripeCustomerId)
       .single();
-    userId = profile?.id;
+    clientId = profile?.id;
   }
 
-  if (!userId) {
-    console.error("upsertSubscription: nao foi possivel resolver user_id para subscription", subscription.id);
+  if (!clientId) {
+    console.error("upsertSubscription: nao foi possivel resolver client_id para subscription", subscription.id);
+    return;
+  }
+
+  // Resolver creator_id from metadata
+  const creatorId = subscription.metadata?.creator_id;
+  if (!creatorId) {
+    console.error("upsertSubscription: creator_id ausente no metadata da subscription", subscription.id);
     return;
   }
 
@@ -198,7 +205,8 @@ async function upsertSubscription(subscription: any, userIdOverride?: string) {
   }
 
   const payload = {
-    creator_id: userId,
+    client_id: clientId,
+    creator_id: creatorId,
     plan_id: planId,
     gateway_subscription_id: subscription.id,
     status: mapStripeStatus(subscription.status),
@@ -211,10 +219,10 @@ async function upsertSubscription(subscription: any, userIdOverride?: string) {
     updated_at: new Date().toISOString(),
   };
 
-  // Upsert: creator_id e unique, entao usamos upsert com onConflict
+  // Upsert: composite unique on (client_id, creator_id)
   const { error } = await supabaseAdmin
     .from("creator_subscriptions")
-    .upsert(payload, { onConflict: "creator_id" });
+    .upsert(payload, { onConflict: "client_id,creator_id" });
 
   if (error) {
     console.error("Erro ao upsert creator_subscriptions:", error.message);

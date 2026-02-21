@@ -46,10 +46,11 @@ export default function LivePage() {
 
     async function enter() {
       const isFree = !live!.ticket_price
+      const isCreator = live!.creator_id === user!.id
       const isLive = live!.status === 'live'
 
-      // Se é pago, verifica ticket
-      if (!isFree) {
+      // Se é pago e nao é o criador, verifica ticket
+      if (!isFree && !isCreator) {
         const hasTicket = await checkTicket(live!.id, user!.id)
         if (!hasTicket) {
           setStatus('no-ticket')

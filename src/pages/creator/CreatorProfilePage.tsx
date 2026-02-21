@@ -471,6 +471,7 @@ export default function CreatorProfilePage() {
       const { data, error } = await supabase.functions.invoke('create-checkout-subscription-stripe', {
         body: {
           price_id: priceId,
+          creator_id: profileId,
           success_url: successUrl,
           cancel_url: cancelUrl,
         },

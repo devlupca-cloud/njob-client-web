@@ -1,6 +1,6 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.0.0";
-import Stripe from "https://esm.sh/stripe@10.17.0";
+import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.1?target=deno";
+import Stripe from "https://esm.sh/stripe@17.7.0?target=deno";
 import { jwtVerify } from "https://deno.land/x/jose@v4.14.4/index.ts";
 
 const corsHeaders = {
@@ -10,7 +10,7 @@ const corsHeaders = {
 };
 
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY"), {
-  apiVersion: "2022-11-15",
+  apiVersion: "2024-12-18.acacia",
   httpClient: Stripe.createFetchHttpClient()
 });
 
@@ -40,8 +40,9 @@ serve(async (req) => {
     if (!userId || !userEmail) throw new Error("Dados do usuário inválidos no token");
 
     const body = await req.json();
-    const { price_id, success_url: custom_success_url, cancel_url: custom_cancel_url } = body;
+    const { price_id, creator_id, success_url: custom_success_url, cancel_url: custom_cancel_url } = body;
     if (!price_id) throw new Error("price_id é obrigatório");
+    if (!creator_id) throw new Error("creator_id é obrigatório");
 
     const finalSuccessUrl = custom_success_url || 'https://njob-client-web.vercel.app/home';
     const finalCancelUrl = custom_cancel_url || 'https://njob-client-web.vercel.app/home';
@@ -91,7 +92,10 @@ serve(async (req) => {
       client_reference_id: userId,
       success_url: finalSuccessUrl,
       cancel_url: finalCancelUrl,
-      metadata: { supabase_user_id: userId },
+      metadata: { supabase_user_id: userId, creator_id },
+      subscription_data: {
+        metadata: { supabase_user_id: userId, creator_id },
+      },
     });
 
     return new Response(JSON.stringify({

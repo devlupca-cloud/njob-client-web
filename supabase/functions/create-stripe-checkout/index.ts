@@ -1,6 +1,6 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.0.0";
-import Stripe from "https://esm.sh/stripe@14?target=deno";
+import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.1?target=deno";
+import Stripe from "https://esm.sh/stripe@17.7.0?target=deno";
 import { jwtVerify } from "https://deno.land/x/jose@v4.14.4/index.ts";
 
 const corsHeaders = {
@@ -13,7 +13,7 @@ const corsHeaders = {
 const APPLICATION_FEE_PERCENTAGE = 0.15;
 
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, {
-  apiVersion: "2022-11-15",
+  apiVersion: "2024-12-18.acacia",
   httpClient: Stripe.createFetchHttpClient(),
 });
 
