@@ -87,7 +87,7 @@ serve(async (req) => {
     const accountLink = await stripe.accountLinks.create({
       account: stripeAccountId,
       refresh_url: `${baseUrl}/functions/v1/create-stripe-connected-account`,
-      return_url: "https://njob-creator.vercel.app/profile",
+      return_url: "https://njob-creator.vercel.app/home",
       type: "account_onboarding",
     });
 

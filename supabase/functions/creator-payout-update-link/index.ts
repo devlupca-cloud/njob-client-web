@@ -84,8 +84,8 @@ serve(async (req) => {
       // Conta incompleta: gerar link de onboarding/atualizacao
       const accountLink = await stripe.accountLinks.create({
         account: stripeAccountId,
-        refresh_url: "https://njob-creator.vercel.app/profile",
-        return_url: "https://njob-creator.vercel.app/profile",
+        refresh_url: "https://njob-creator.vercel.app/home",
+        return_url: "https://njob-creator.vercel.app/home",
         type: "account_onboarding",
       });
       url = accountLink.url;
