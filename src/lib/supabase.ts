@@ -17,11 +17,11 @@ if (!supabaseUrl || !supabaseAnonKey) {
  */
 const lockChain = new Map<string, Promise<unknown>>()
 
-async function inMemoryLock(
+async function inMemoryLock<R>(
   name: string,
   acquireTimeout: number,
-  fn: () => Promise<unknown>,
-): Promise<unknown> {
+  fn: () => Promise<R>,
+): Promise<R> {
   const prev = lockChain.get(name)
 
   if (prev) {

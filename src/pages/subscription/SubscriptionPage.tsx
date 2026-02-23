@@ -216,7 +216,8 @@ export default function SubscriptionPage() {
   const queryClient = useQueryClient()
   const { t } = useTranslation()
   const { toast } = useToast()
-  const [isManaging, setIsManaging] = useState(false)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [isManaging, _setIsManaging] = useState(false)
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['subscription', user?.id],

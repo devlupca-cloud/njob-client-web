@@ -4,7 +4,6 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tansta
 import { useTranslation } from 'react-i18next'
 import {
   ArrowLeft,
-  MoreVertical,
   Heart,
   MessageCircle,
   Radio,
@@ -14,10 +13,8 @@ import {
   Calendar,
   Phone,
   Clock,
-  Star,
   X,
   ChevronRight,
-  Users,
   Ticket,
   DollarSign,
   Loader2,
@@ -629,51 +626,6 @@ export default function CreatorProfilePage() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
 
-  const sendMessageMutation = useMutation({
-    mutationFn: async () => {
-      if (!currentUser?.id) return
-
-      // Busca conversa existente via view
-      const { data: existing } = await supabase
-        .from('vw_creator_conversations')
-        .select('conversation_id')
-        .eq('profile_id', currentUser.id)
-        .eq('peer_id', profileId!)
-        .limit(1)
-        .maybeSingle()
-
-      if (existing?.conversation_id) {
-        navigate(`/chat/${existing.conversation_id}`)
-        return
-      }
-
-      // Cria nova conversa
-      const { data: newConv, error: convError } = await supabase
-        .from('conversations')
-        .insert({ is_group: false })
-        .select('id')
-        .single()
-
-      if (convError || !newConv) throw convError ?? new Error('Erro ao criar conversa')
-
-      // Adiciona participantes
-      const { error: partError } = await supabase
-        .from('conversation_participants')
-        .insert([
-          { conversation_id: newConv.id, profile_id: currentUser.id },
-          { conversation_id: newConv.id, profile_id: profileId! },
-        ])
-
-      if (partError) throw partError
-
-      navigate(`/chat/${newConv.id}`)
-    },
-    onError: (err) => {
-      console.error('[CreatorProfile] Erro ao abrir conversa:', err)
-      toast({ title: t('creator.messageError'), type: 'error' })
-    },
-  })
-
   const likeMutation = useMutation({
     mutationFn: async () => {
       if (!currentUser?.id || !profileId) return
@@ -684,13 +636,6 @@ export default function CreatorProfilePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['creator-profile', profileId] })
-    },
-  })
-
-  // STRIPE_DISABLED: Subscribe mutation temporarily disabled
-  const subscribeMutation = useMutation({
-    mutationFn: async () => {
-      toast({ title: t('payments.addCard.comingSoon'), type: 'info' })
     },
   })
 
@@ -712,7 +657,7 @@ export default function CreatorProfilePage() {
     )
   }
 
-  const { creator, packs, lives, subscribersCount, isSubscribed } = data
+  const { creator, packs, lives } = data
   const activeLive = lives.find((l) => l.status === 'live')
   const scheduledLives = lives.filter((l) => l.status === 'scheduled')
   const photos = creator.imagens.filter((img) => img.type === 'photo')

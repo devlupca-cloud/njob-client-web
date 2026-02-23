@@ -92,6 +92,7 @@ async function fetchCreators(userId?: string): Promise<Creator[]> {
       curtiu: likedIds.has(row.id),
       notificacoes: null,
       favorito: false,
+      whatsapp: null,
     }
   })
 }
