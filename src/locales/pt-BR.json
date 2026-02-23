@@ -1,0 +1,481 @@
+{
+  "common": {
+    "back": "Voltar",
+    "save": "Salvar",
+    "saving": "Salvando...",
+    "confirm": "Confirmar",
+    "cancel": "Cancelar",
+    "search": "Buscar",
+    "loading": "Carregando...",
+    "error": "Erro",
+    "tryAgain": "Tente novamente.",
+    "name": "Nome",
+    "email": "E-mail",
+    "password": "Senha",
+    "free": "Grátis",
+    "copy": "Copiar",
+    "copied": "Copiado!",
+    "description": "Descrição",
+    "info": "Informações",
+    "seeAll": "Ver todos",
+    "seeMore": "Ver mais",
+    "seeLess": "Ver menos",
+    "photos": "Fotos",
+    "user": "Usuário",
+    "record": "registro",
+    "records": "registros",
+    "item": "item",
+    "items": "itens"
+  },
+
+  "nav": {
+    "home": "Home",
+    "purchases": "Compras",
+    "profile": "Perfil"
+  },
+
+  "guest": {
+    "title": "Crie sua conta",
+    "description": "Para realizar esta ação, você precisa criar uma conta. É rápido e gratuito!",
+    "register": "Cadastrar",
+    "cancel": "Cancelar"
+  },
+
+  "auth": {
+    "login": {
+      "welcomeBack": "Bem-vindo de volta",
+      "label": "Login",
+      "emailPlaceholder": "Digite seu e-mail",
+      "passwordLabel": "Senha",
+      "passwordPlaceholder": "Digite sua senha",
+      "rememberMe": "Lembrar-me",
+      "forgotPassword": "Esqueci a senha",
+      "submit": "Entrar",
+      "submitting": "Entrando...",
+      "guestEntry": "Entrar como convidado",
+      "register": "Cadastro",
+      "invalidCredentials": "E-mail ou senha incorretos.",
+      "genericError": "Erro ao fazer login. Tente novamente."
+    },
+    "register": {
+      "title": "Novo cadastro",
+      "subtitle": "Insira as informações para cadastrar sua conta.",
+      "namePlaceholder": "Digite seu nome completo",
+      "emailPlaceholder": "Digite seu melhor e-mail",
+      "birthDate": "Data de nascimento",
+      "birthDatePlaceholder": "DD/MM/AAAA",
+      "passwordPlaceholder": "Digite uma senha",
+      "passwordHint": "Mínimo 6 caracteres",
+      "confirmPassword": "Confirmar senha",
+      "confirmPasswordPlaceholder": "Confirme sua senha",
+      "submit": "Cadastrar",
+      "submitting": "Cadastrando...",
+      "loginLink": "Fazer login",
+      "nameRequired": "Nome é obrigatório",
+      "nameMinLength": "Nome deve ter pelo menos 2 caracteres",
+      "nameTooLong": "Nome muito longo",
+      "emailRequired": "E-mail é obrigatório",
+      "emailInvalid": "E-mail inválido",
+      "birthDateRequired": "Data de nascimento é obrigatória",
+      "ageMinimum": "Você deve ter pelo menos 18 anos",
+      "passwordRequired": "Senha é obrigatória",
+      "passwordMinLength": "A senha deve ter pelo menos 6 caracteres",
+      "confirmPasswordRequired": "Confirmação de senha é obrigatória",
+      "passwordsMismatch": "As senhas não coincidem",
+      "emailAlreadyUsed": "Este e-mail já está cadastrado.",
+      "genericError": "Erro ao criar conta. Tente novamente."
+    },
+    "forgotPassword": {
+      "title": "Recuperação de senha",
+      "subtitle": "Preencha o campo abaixo com o e-mail cadastrado na sua conta. Enviaremos um código para redefinição de senha.",
+      "emailPlaceholder": "Digite seu e-mail",
+      "submit": "Recuperar acesso",
+      "submitting": "Enviando...",
+      "backToLogin": "Voltar ao login",
+      "haveCode": "Já tem o código?",
+      "enterCode": "Inserir código",
+      "codeSent": "Código enviado! Verifique sua caixa de entrada.",
+      "emailNotFound": "E-mail não encontrado. Verifique e tente novamente.",
+      "genericError": "Erro ao enviar e-mail. Tente novamente."
+    },
+    "verifyOTP": {
+      "title": "Verificação de código",
+      "subtitle": "Insira o código de 6 dígitos enviado para",
+      "yourEmail": "seu e-mail",
+      "submit": "Confirmar",
+      "submitting": "Verificando...",
+      "invalidCode": "Código inválido. Tente novamente.",
+      "expiredCode": "Código inválido ou expirado. Solicite um novo código.",
+      "noCodeReceived": "Não recebeu nenhum código?",
+      "resend": "Enviar novamente",
+      "resendTimer": "Solicite novo código em"
+    },
+    "newPassword": {
+      "title": "Nova senha",
+      "subtitle": "Digite abaixo sua nova senha. Escolha uma senha forte com letras e números.",
+      "newPasswordLabel": "Nova senha",
+      "newPasswordPlaceholder": "Digite uma nova senha",
+      "confirmLabel": "Confirmar senha",
+      "confirmPlaceholder": "Confirme a senha",
+      "requirements": "A senha deve conter:",
+      "reqMinChars": "Pelo menos 6 caracteres",
+      "reqLetter": "Pelo menos uma letra",
+      "reqNumber": "Pelo menos um número",
+      "submit": "Confirmar",
+      "submitting": "Salvando...",
+      "success": "Senha alterada com sucesso!",
+      "genericError": "Erro ao atualizar senha. Tente novamente.",
+      "passwordRequired": "Nova senha é obrigatória",
+      "passwordMinLength": "A senha deve ter pelo menos 6 caracteres",
+      "passwordNeedLetter": "A senha deve conter pelo menos uma letra",
+      "passwordNeedNumber": "A senha deve conter pelo menos um número",
+      "passwordsMismatch": "As senhas não coincidem",
+      "strengthWeak": "Fraca",
+      "strengthFair": "Regular",
+      "strengthGood": "Boa",
+      "strengthStrong": "Forte"
+    }
+  },
+
+  "home": {
+    "searchPlaceholder": "Buscar creators...",
+    "noResults": "Nenhum resultado para \"{{query}}\"",
+    "noCreators": "Nenhum creator encontrado",
+    "tryOtherSearch": "Tente buscar por outro nome.",
+    "comeBackLater": "Volte mais tarde para ver novos perfis.",
+    "loadError": "Erro ao carregar creators. Tente novamente mais tarde.",
+    "filterAll": "Todos",
+    "filterOnline": "Online",
+    "filterLives": "Lives",
+    "filterContent": "Conteúdo",
+    "filterInPerson": "Presencial",
+    "filterWomen": "Mulheres",
+    "filterMen": "Homens",
+    "sectionLive": "Ao vivo agora",
+    "sectionOnline": "Online agora",
+    "sectionPopular": "Mais populares",
+    "sectionNew": "Novos na plataforma"
+  },
+
+  "profile": {
+    "title": "Perfil",
+    "changeAvatar": "Alterar foto de perfil",
+    "avatarError": "Erro ao fazer upload do avatar:",
+    "logout": "Sair da conta",
+    "personalInfo": "Informações pessoais",
+    "subscription": "Assinatura",
+    "payments": "Pagamentos",
+    "coupons": "Cupons",
+    "financial": "Financeiro",
+    "purchases": "Compras",
+    "personalInfoPage": {
+      "title": "Informações pessoais",
+      "name": "Nome",
+      "email": "Email",
+      "password": "Senha",
+      "language": "Idioma"
+    },
+    "changeName": {
+      "title": "Alterar nome",
+      "label": "Nome completo",
+      "placeholder": "Digite seu nome completo",
+      "success": "Nome alterado com sucesso!",
+      "genericError": "Erro ao salvar nome. Tente novamente.",
+      "minLength": "Nome deve ter pelo menos 2 caracteres",
+      "tooLong": "Nome muito longo"
+    },
+    "changeEmail": {
+      "title": "Alterar e-mail",
+      "label": "Novo e-mail",
+      "placeholder": "Digite seu novo e-mail",
+      "disclaimer": "Você receberá um e-mail de confirmação no novo endereço antes da alteração ser aplicada.",
+      "successTitle": "Verifique seu e-mail",
+      "successSent": "Enviamos um link de confirmação para",
+      "successInstructions": "Clique no link para concluir a alteração.",
+      "backToProfile": "Voltar ao perfil",
+      "genericError": "Erro ao alterar e-mail. Tente novamente.",
+      "emailRequired": "E-mail é obrigatório",
+      "emailInvalid": "E-mail inválido"
+    },
+    "changePassword": {
+      "title": "Alterar senha",
+      "currentLabel": "Senha atual",
+      "currentPlaceholder": "Digite sua senha atual",
+      "newLabel": "Nova senha",
+      "newPlaceholder": "Digite a nova senha",
+      "confirmLabel": "Confirmar nova senha",
+      "confirmPlaceholder": "Confirme a nova senha",
+      "hint": "A nova senha deve ter pelo menos 6 caracteres e ser diferente da senha atual.",
+      "successTitle": "Senha alterada!",
+      "successMessage": "Sua senha foi atualizada com sucesso.",
+      "genericError": "Erro ao alterar senha. Tente novamente.",
+      "currentRequired": "Senha atual é obrigatória",
+      "newMinLength": "Nova senha deve ter pelo menos 6 caracteres",
+      "confirmRequired": "Confirmação de senha é obrigatória",
+      "sameAsOld": "A nova senha não pode ser igual à senha atual",
+      "mismatch": "As senhas não coincidem",
+      "showPassword": "Mostrar senha",
+      "hidePassword": "Ocultar senha"
+    },
+    "changeLanguage": {
+      "title": "Idioma",
+      "subtitle": "Selecione o idioma de sua preferência.",
+      "savePreference": "Salvar preferência",
+      "saved": "Salvo!"
+    }
+  },
+
+  "creator": {
+    "notFound": "Não foi possível carregar o perfil. Tente novamente.",
+    "liveWith": "Live com",
+    "freeLive": "Gratuita",
+    "joinLive": "Entrar na live",
+    "buyTicket": "Comprar ingresso",
+    "videoCall": "Chamada individual",
+    "videoCallDisclaimer": "O prestador de serviço tem o direito de recusar a chamada caso o cliente não esteja de acordo com os termos de uso.",
+    "videoCallOnline": "Esse usuário está online, e você pode iniciar uma chamada de vídeo agora.",
+    "callNow": "Chamar agora",
+    "contentPurchase": "Compra de Conteúdo",
+    "content": "Conteúdo",
+    "includedInPack": "incluídos neste pacote",
+    "buyFor": "Comprar por",
+    "noSubscriptionPlans": "Nenhum plano de assinatura disponível",
+    "liveNow": "AO VIVO — Entrar",
+    "like": "Curtir",
+    "sendMessage": "Enviar mensagem",
+    "messageError": "Não foi possível abrir a conversa. Tente novamente.",
+    "subscribing": "Assinando",
+    "subscribe": "Assinar",
+    "likes": "curtidas",
+    "subscribers": "assinantes",
+    "sellsContent": "Vende conteúdo",
+    "exclusiveContent": "Fotos, vídeos e áudios exclusivos",
+    "videoCallLabel": "Chamada de vídeo",
+    "startingAt": "A partir de",
+    "per30min": "/30min",
+    "availableNow": "Disponível agora",
+    "inPersonMeeting": "Encontro presencial",
+    "onDemand": "Sob consulta",
+    "perHour": "/hora",
+    "packs": "Pacotes",
+    "liveNowLabel": "Ao vivo agora",
+    "upcomingEvents": "Próximos eventos",
+    "liveTag": "AO VIVO",
+    "freeTag": "Gratis",
+    "about": "Sobre",
+    "report": "Denunciar",
+    "block": "Bloquear",
+    "shareProfile": "Compartilhar perfil",
+    "seeAllContent": "Ver todo o conteúdo",
+    "checkoutError": "Erro ao criar checkout. Tente novamente."
+  },
+
+  "chat": {
+    "conversations": {
+      "title": "Mensagens",
+      "searchPlaceholder": "Buscar conversa...",
+      "closeSearch": "Fechar busca",
+      "noResults": "Nenhuma conversa encontrada",
+      "empty": "Nenhuma conversa ainda",
+      "noResultsHint": "Tente buscar por outro nome",
+      "emptyHint": "Suas mensagens com creators aparecerão aqui",
+      "noName": "Sem nome",
+      "startConversation": "Iniciar conversa"
+    },
+    "page": {
+      "title": "Conversa",
+      "online": "Online",
+      "emptyHint": "Enviar uma mensagem para iniciar a conversa",
+      "inputPlaceholder": "Escreva sua mensagem...",
+      "today": "Hoje",
+      "yesterday": "Ontem",
+      "send": "Enviar mensagem"
+    }
+  },
+
+  "subscription": {
+    "title": "Assinatura",
+    "popular": "POPULAR",
+    "current": "ATUAL",
+    "currentPlan": "Plano atual",
+    "contractPlan": "Contratar plano",
+    "activeSubscription": "Assinatura ativa",
+    "renewsAt": "Renova em {{date}}",
+    "loadError": "Erro ao carregar planos. Tente novamente.",
+    "opening": "Abrindo...",
+    "manageSubscription": "Gerenciar assinatura",
+    "success": "Assinatura realizada com sucesso!",
+    "checkoutCanceled": "Checkout cancelado.",
+    "noPlansAvailable": "Nenhum plano de assinatura disponível",
+    "checkoutError": "Erro ao iniciar checkout. Tente novamente.",
+    "portalError": "Erro ao abrir portal de gerenciamento.",
+    "mySubscription": "Minha Assinatura",
+    "otherPlans": "Outros Planos",
+    "availablePlans": "Planos Disponíveis",
+    "noPlansNow": "Nenhum plano disponível no momento.",
+    "cancelAnytime": "Cancele a qualquer momento. Sem fidelidade."
+  },
+
+  "coupons": {
+    "title": "Cupons",
+    "active": "Ativo",
+    "expired": "Expirado",
+    "validUntil": "Até",
+    "copyCode": "Copiar código",
+    "empty": "Nenhum cupom encontrado",
+    "emptyHint": "Seus cupons aparecerão aqui quando disponíveis.",
+    "loadError": "Erro ao carregar cupons. Tente novamente mais tarde.",
+    "detail": {
+      "title": "Detalhe do Cupom",
+      "notFound": "Cupom não encontrado",
+      "loadError": "Não foi possível carregar o cupom.",
+      "promoCode": "Código Promocional",
+      "discountType": "Tipo de desconto",
+      "percentage": "Percentual (%)",
+      "fixedValue": "Valor fixo (R$)",
+      "validUntil": "Válido até",
+      "store": "Loja"
+    }
+  },
+
+  "financial": {
+    "title": "Financeiro",
+    "transactions": "Transações",
+    "balance": "Saldo",
+    "income": "Entradas",
+    "expenses": "Saídas",
+    "loadError": "Erro ao carregar transações. Tente novamente.",
+    "empty": "Nenhuma transação no período selecionado.",
+    "periods": {
+      "thisMonth": "Este mês",
+      "3months": "3 meses",
+      "6months": "6 meses",
+      "1year": "1 ano",
+      "all": "Tudo"
+    },
+    "types": {
+      "packPurchase": "Compra de pack",
+      "subscription": "Assinatura",
+      "videoCall": "Chamada de vídeo",
+      "liveTicket": "Ingresso de live",
+      "refund": "Reembolso"
+    },
+    "statuses": {
+      "pending": "Pendente",
+      "completed": "Concluído",
+      "failed": "Falhou",
+      "refunded": "Reembolsado"
+    }
+  },
+
+  "purchases": {
+    "title": "Compras",
+    "tabs": {
+      "packs": "Pacotes",
+      "lives": "Lives",
+      "calls": "Chamadas"
+    },
+    "statuses": {
+      "pending": "Pendente",
+      "confirmed": "Confirmada",
+      "done": "Realizada",
+      "canceled": "Cancelada"
+    },
+    "emptyPacks": "Você ainda não comprou nenhum pacote.",
+    "emptyLives": "Você ainda não comprou ingresso para nenhuma live.",
+    "emptyCalls": "Você ainda não agendou nenhuma chamada.",
+    "liveStatuses": {
+      "live": "Ao vivo",
+      "scheduled": "Agendada",
+      "ended": "Encerrada"
+    },
+    "freeTag": "Grátis",
+    "packRemoved": "Pack removido",
+    "liveRemoved": "Live removida",
+    "loadError": "Erro ao carregar compras. Tente novamente."
+  },
+
+  "payments": {
+    "savedCards": {
+      "title": "Cartões de Pagamento",
+      "default": "PADRÃO",
+      "confirmRemove": "Clique novamente para confirmar",
+      "removeCard": "Remover cartão",
+      "removeError": "Erro ao remover cartão. Tente novamente.",
+      "empty": "Nenhum cartão cadastrado",
+      "emptyHint": "Adicione um cartão para facilitar seus pagamentos.",
+      "addCard": "Adicionar cartão",
+      "addNew": "Adicionar novo cartão",
+      "loadError": "Erro ao carregar cartões. Tente novamente."
+    },
+    "addCard": {
+      "title": "Adicionar Cartão",
+      "comingSoon": "Em breve",
+      "comingSoonDescription": "O cadastro de cartões está sendo implementado com integração segura via Stripe. Por enquanto, o pagamento é feito diretamente no checkout.",
+      "stripeInfo": "Pagamentos processados com segurança pelo Stripe."
+    }
+  },
+
+  "notifications": {
+    "title": "Notificações",
+    "all": "Todas",
+    "unread": "Não lidas",
+    "markAsRead": "Toque para marcar como lida",
+    "markReadError": "Erro ao marcar como lida",
+    "allRead": "Todas as notificações foram marcadas como lidas",
+    "markAllError": "Erro ao marcar notificações",
+    "markAllRead": "Marcar todas como lidas",
+    "allCaughtUp": "Tudo em dia!",
+    "allCaughtUpHint": "Nenhuma notificação não lida. Você está em dia com tudo.",
+    "seeAll": "Ver todas",
+    "empty": "Sem notificações",
+    "emptyHint": "Quando você tiver notificações elas aparecerão aqui."
+  },
+
+  "card": {
+    "sellsContent": "Vende conteúdo",
+    "videoCall": "Chamada de vídeo",
+    "inPerson": "Encontro presencial",
+    "removeFavorite": "Remover dos favoritos",
+    "addFavorite": "Adicionar aos favoritos",
+    "liveTag": "LIVE"
+  },
+
+  "callRoom": {
+    "title": "Videochamada",
+    "back": "Voltar",
+    "unauthorized": "Você não tem permissão para acessar esta chamada.",
+    "loadError": "Erro ao carregar dados da chamada.",
+    "goToPurchases": "Ir para compras",
+    "callWith": "Chamada com {{creatorName}}",
+    "roomOpensEarly": "A sala abre 5 minutos antes do horário agendado. Volte às {{time}}.",
+    "callEnded": "Chamada encerrada",
+    "callPast": "Esta chamada já passou do horário agendado.",
+    "seePurchases": "Ver minhas compras",
+    "connecting": "Entrando na chamada com {{creatorName}}..."
+  },
+
+  "contentPage": {
+    "gallery": "Galeria de conteúdo",
+    "filterAll": "Todos",
+    "filterPhotos": "Fotos",
+    "filterVideos": "Vídeos",
+    "filterAudios": "Áudios",
+    "emptyAll": "Nenhum conteúdo disponível ainda.",
+    "emptyPhotos": "Nenhuma foto disponível.",
+    "emptyVideos": "Nenhum vídeo disponível.",
+    "emptyAudios": "Nenhum áudio disponível.",
+    "loadError": "Erro ao carregar conteúdo. Tente novamente.",
+    "purchaseTitle": "Compra de Conteúdo",
+    "info": "Informações",
+    "contentLabel": "Conteúdo",
+    "processing": "Processando...",
+    "buyFor": "Comprar por"
+  },
+
+  "notFound": {
+    "title": "Página não encontrada",
+    "description": "A página que você procura não existe ou foi movida.",
+    "goHome": "Ir para Home"
+  }
+}

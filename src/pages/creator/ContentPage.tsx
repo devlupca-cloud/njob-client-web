@@ -13,9 +13,11 @@ import {
   Package,
   Grid3x3,
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { supabase } from '@/lib/supabase'
-import { APP_URL } from '@/lib/config'
 import { useAuthStore } from '@/store/authStore'
+import { APP_URL } from '@/lib/config'
+import { formatCurrency } from '@/lib/utils'
 import type { PackItem } from '@/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -26,7 +28,8 @@ interface EnrichedItem extends PackItem {
   pack_id: string
   pack_title: string
   pack_price: number
-  stripe_price_id: string | null
+  pack_stripe_price_id: string | null
+  pack_creator_id: string
   is_purchased: boolean
 }
 
@@ -36,14 +39,6 @@ interface ContentData {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function formatPrice(value: number): string {
-  return value.toLocaleString('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-    minimumFractionDigits: 2,
-  })
-}
 
 function mediaTypeToFilter(type: PackItem['media_type']): MediaFilter {
   switch (type) {
@@ -85,7 +80,7 @@ async function fetchCreatorContent(
     price: p.price,
     stripe_price_id: p.stripe_price_id ?? null,
     cover_url: p.cover_image_url ?? null,
-    items: p.pack_items ?? [],
+    items: (p.pack_items ?? []) as PackItem[],
     created_at: p.created_at,
   }))
 
@@ -111,7 +106,8 @@ async function fetchCreatorContent(
         pack_id: pack.id,
         pack_title: pack.title,
         pack_price: pack.price,
-        stripe_price_id: pack.stripe_price_id,
+        pack_stripe_price_id: pack.stripe_price_id,
+        pack_creator_id: pack.creator_id,
         is_purchased: isPurchased,
         is_locked: item.is_locked && !isPurchased,
       })
@@ -215,7 +211,7 @@ function MediaThumb({
         <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center gap-1">
           <Lock size={18} className="text-white" />
           <span className="text-[10px] font-bold text-white">
-            {formatPrice(item.pack_price)}
+            {formatCurrency(item.pack_price)}
           </span>
         </div>
       )}
@@ -324,6 +320,7 @@ function PurchaseModal({
   onBuy: () => void
   isBuying: boolean
 }) {
+  const { t } = useTranslation()
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm"
@@ -347,7 +344,7 @@ function PurchaseModal({
         </div>
 
         <h2 className="text-lg font-bold text-[hsl(var(--foreground))] text-center mb-6">
-          Compra de Conteúdo
+          {t('contentPage.purchaseTitle')}
         </h2>
 
         {/* Preview blurred */}
@@ -365,17 +362,17 @@ function PurchaseModal({
         )}
 
         {/* Info */}
-        <p className="text-sm font-semibold text-[hsl(var(--primary))] mb-2">Informações</p>
+        <p className="text-sm font-semibold text-[hsl(var(--primary))] mb-2">{t('contentPage.info')}</p>
         <p className="text-sm text-[hsl(var(--muted-foreground))] mb-3">{item.pack_title}</p>
 
         <div className="flex items-center gap-2 mb-2">
           <DollarSign size={18} className="text-[hsl(var(--muted-foreground))]" />
           <span className="text-sm font-semibold text-[hsl(var(--foreground))]">
-            {formatPrice(item.pack_price)}
+            {formatCurrency(item.pack_price)}
           </span>
         </div>
 
-        <p className="text-sm font-semibold text-[hsl(var(--primary))] mb-1 mt-4">Conteúdo</p>
+        <p className="text-sm font-semibold text-[hsl(var(--primary))] mb-1 mt-4">{t('contentPage.contentLabel')}</p>
         <p className="text-sm text-[hsl(var(--muted-foreground))] mb-8">
           {item.title}
           {item.description ? ` — ${item.description}` : ''}
@@ -392,7 +389,7 @@ function PurchaseModal({
           "
         >
           <Package size={18} />
-          {isBuying ? 'Processando...' : `Comprar por ${formatPrice(item.pack_price)}`}
+          {isBuying ? t('contentPage.processing') : `${t('contentPage.buyFor')} ${formatCurrency(item.pack_price)}`}
         </button>
       </div>
     </div>
@@ -414,11 +411,12 @@ function ContentSkeleton() {
 // ─── Empty state ─────────────────────────────────────────────────────────────
 
 function EmptyContent({ filter }: { filter: MediaFilter }) {
+  const { t } = useTranslation()
   const messages: Record<MediaFilter, string> = {
-    todos: 'Nenhum conteudo disponivel ainda.',
-    fotos: 'Nenhuma foto disponivel.',
-    videos: 'Nenhum video disponivel.',
-    audios: 'Nenhum audio disponivel.',
+    todos: t('contentPage.emptyAll'),
+    fotos: t('contentPage.emptyPhotos'),
+    videos: t('contentPage.emptyVideos'),
+    audios: t('contentPage.emptyAudios'),
   }
 
   return (
@@ -460,35 +458,29 @@ export default function ContentPage() {
   }
 
   const handleBuy = async () => {
-    if (!purchaseItem || !resolvedProfileId) return
-
-    if (!purchaseItem.stripe_price_id) {
-      alert('Este pacote ainda não está disponível para compra. O criador precisa configurar o preço no Stripe.')
-      setPurchaseItem(null)
-      return
-    }
-
+    if (!purchaseItem) return
+    const item = purchaseItem
     setIsBuying(true)
     try {
       const { data, error } = await supabase.functions.invoke('create-stripe-checkout', {
         body: {
-          creator_id: resolvedProfileId,
-          product_id: purchaseItem.pack_id,
-          stripe_price_id: purchaseItem.stripe_price_id,
+          creator_id: item.pack_creator_id,
+          product_id: item.pack_id,
+          stripe_price_id: item.pack_stripe_price_id,
           product_type: 'pack',
           success_url: `${APP_URL}/purchases`,
-          cancel_url: `${APP_URL}/creator/${resolvedProfileId}/content`,
+          cancel_url: `${APP_URL}/creator/${item.pack_creator_id}/content`,
         },
       })
       if (error) throw error
+      setPurchaseItem(null)
       if (data?.checkoutUrl) {
         window.location.href = data.checkoutUrl
       }
     } catch (err) {
-      console.error('Erro ao criar checkout do pack:', err)
+      console.error('Checkout error:', err)
     } finally {
       setIsBuying(false)
-      setPurchaseItem(null)
     }
   }
 
@@ -505,11 +497,13 @@ export default function ContentPage() {
     audios: data?.items.filter((i) => i.media_type === 'audio').length ?? 0,
   }
 
+  const { t } = useTranslation()
+
   const FILTERS: { key: MediaFilter; label: string; icon: React.ReactNode }[] = [
-    { key: 'todos', label: `Todos (${counts.todos})`, icon: <Grid3x3 size={12} /> },
-    { key: 'fotos', label: `Fotos (${counts.fotos})`, icon: <ImageIcon size={12} /> },
-    { key: 'videos', label: `Videos (${counts.videos})`, icon: <Video size={12} /> },
-    { key: 'audios', label: `Audios (${counts.audios})`, icon: <Mic size={12} /> },
+    { key: 'todos', label: `${t('contentPage.filterAll')} (${counts.todos})`, icon: <Grid3x3 size={12} /> },
+    { key: 'fotos', label: `${t('contentPage.filterPhotos')} (${counts.fotos})`, icon: <ImageIcon size={12} /> },
+    { key: 'videos', label: `${t('contentPage.filterVideos')} (${counts.videos})`, icon: <Video size={12} /> },
+    { key: 'audios', label: `${t('contentPage.filterAudios')} (${counts.audios})`, icon: <Mic size={12} /> },
   ]
 
   return (
@@ -529,7 +523,7 @@ export default function ContentPage() {
             <h1 className="text-base font-bold text-[hsl(var(--foreground))] truncate">
               {data?.creatorName ?? 'Conteúdo'}
             </h1>
-            <p className="text-xs text-[hsl(var(--muted-foreground))]">Galeria de conteudo</p>
+            <p className="text-xs text-[hsl(var(--muted-foreground))]">{t('contentPage.gallery')}</p>
           </div>
         </div>
 
@@ -564,7 +558,7 @@ export default function ContentPage() {
         {isError && !isLoading && (
           <div className="flex items-center justify-center py-16 px-8 text-center">
             <p className="text-sm text-[hsl(var(--muted-foreground))]">
-              Erro ao carregar conteudo. Tente novamente.
+              {t('contentPage.loadError')}
             </p>
           </div>
         )}

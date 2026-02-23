@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Search, X, MessageCircle } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
+import { useTranslation } from 'react-i18next'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -23,7 +24,7 @@ interface VwCreatorConversation {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function formatTime(isoString: string | null): string {
+function formatTime(isoString: string | null, yesterdayLabel: string): string {
   if (!isoString) return ''
   const date = new Date(isoString)
   const now = new Date()
@@ -33,7 +34,7 @@ function formatTime(isoString: string | null): string {
     date.getDate() === now.getDate()
 
   if (isToday) {
-    return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
   }
 
   const yesterday = new Date(now)
@@ -43,9 +44,9 @@ function formatTime(isoString: string | null): string {
     date.getMonth() === yesterday.getMonth() &&
     date.getDate() === yesterday.getDate()
 
-  if (isYesterday) return 'Ontem'
+  if (isYesterday) return yesterdayLabel
 
-  return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+  return date.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' })
 }
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
@@ -106,6 +107,7 @@ function Avatar({
 export default function ConversationsPage() {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
+  const { t } = useTranslation()
   const [search, setSearch] = useState('')
   const [isSearchOpen, setIsSearchOpen] = useState(false)
 
@@ -155,14 +157,13 @@ export default function ConversationsPage() {
       <div className="sticky top-0 z-10 bg-[hsl(var(--background))] border-b border-[hsl(var(--border))]">
         <div className="flex items-center justify-between px-4 py-4 max-w-3xl mx-auto">
           {isSearchOpen ? (
-            /* Search bar expanded */
             <div className="flex items-center gap-3 flex-1">
               <div className="flex-1 flex items-center gap-2 bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-full px-4 h-10">
                 <Search className="w-4 h-4 text-[hsl(var(--muted-foreground))] shrink-0" />
                 <input
                   autoFocus
                   type="text"
-                  placeholder="Buscar conversa..."
+                  placeholder={t('chat.conversations.searchPlaceholder')}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="flex-1 bg-transparent text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] outline-none"
@@ -171,16 +172,15 @@ export default function ConversationsPage() {
               <button
                 onClick={handleCloseSearch}
                 className="p-1 text-[hsl(var(--muted-foreground))]"
-                aria-label="Fechar busca"
+                aria-label={t('chat.conversations.closeSearch')}
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
           ) : (
-            /* Default header */
             <>
               <h1 className="text-xl font-semibold text-[hsl(var(--foreground))]">
-                Mensagens
+                {t('chat.conversations.title')}
               </h1>
               <div className="flex items-center gap-2">
                 {conversations.length > 0 && (
@@ -191,7 +191,7 @@ export default function ConversationsPage() {
                 <button
                   onClick={() => setIsSearchOpen(true)}
                   className="p-2 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
-                  aria-label="Buscar"
+                  aria-label={t('common.search')}
                 >
                   <Search className="w-5 h-5" />
                 </button>
@@ -204,31 +204,28 @@ export default function ConversationsPage() {
       {/* Content */}
       <div className="flex-1 max-w-3xl mx-auto w-full">
         {isLoading ? (
-          /* Skeletons */
           <div className="divide-y divide-[hsl(var(--border))]">
             {Array.from({ length: 6 }).map((_, i) => (
               <ConversationSkeleton key={i} />
             ))}
           </div>
         ) : filtered.length === 0 ? (
-          /* Empty state */
           <div className="flex flex-col items-center justify-center gap-4 py-24 px-8 text-center">
             <div className="w-16 h-16 rounded-full bg-[hsl(var(--card))] flex items-center justify-center">
               <MessageCircle className="w-8 h-8 text-[hsl(var(--muted-foreground))]" />
             </div>
             <div>
               <p className="text-[hsl(var(--foreground))] font-medium">
-                {search ? 'Nenhuma conversa encontrada' : 'Nenhuma conversa ainda'}
+                {search ? t('chat.conversations.noResults') : t('chat.conversations.empty')}
               </p>
               <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
                 {search
-                  ? 'Tente buscar por outro nome'
-                  : 'Suas mensagens com creators aparecerão aqui'}
+                  ? t('chat.conversations.noResultsHint')
+                  : t('chat.conversations.emptyHint')}
               </p>
             </div>
           </div>
         ) : (
-          /* List */
           <ul className="divide-y divide-[hsl(var(--border))]">
             {filtered.map((conv) => {
               const unread = conv.unread_count ?? 0
@@ -244,7 +241,6 @@ export default function ConversationsPage() {
                       isOnline={conv.peer_is_online}
                     />
 
-                    {/* Info */}
                     <div className="flex-1 min-w-0">
                       <p
                         className={`text-sm truncate ${
@@ -253,7 +249,7 @@ export default function ConversationsPage() {
                             : 'font-medium text-[hsl(var(--foreground))]'
                         }`}
                       >
-                        {conv.peer_name ?? 'Sem nome'}
+                        {conv.peer_name ?? t('chat.conversations.noName')}
                       </p>
                       <div className="flex items-center gap-1 mt-0.5">
                         {conv.last_message_read_by_client && (
@@ -271,15 +267,14 @@ export default function ConversationsPage() {
                           </svg>
                         )}
                         <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">
-                          {conv.last_message ?? 'Iniciar conversa'}
+                          {conv.last_message ?? t('chat.conversations.startConversation')}
                         </p>
                       </div>
                     </div>
 
-                    {/* Meta */}
                     <div className="flex flex-col items-end gap-1.5 shrink-0">
                       <span className="text-xs text-[hsl(var(--muted-foreground))]">
-                        {formatTime(conv.last_message_created_at)}
+                        {formatTime(conv.last_message_created_at, t('chat.page.yesterday'))}
                       </span>
                       {unread > 0 && (
                         <span className="w-5 h-5 rounded-full bg-[hsl(var(--primary))] text-white text-[10px] font-semibold flex items-center justify-center">

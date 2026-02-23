@@ -1,12 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft, Radio, ShieldAlert } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
+import { generateToken, ZegoUIKitPrebuilt } from '@/lib/zegocloud'
 import type { LiveStream } from '@/types'
-
-const LIVE_CANVAS_BASE = 'https://live-canvas-vue.lovable.app'
 
 async function fetchLive(id: string): Promise<LiveStream> {
   const { data, error } = await supabase
@@ -33,7 +32,9 @@ export default function LivePage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { profile, user } = useAuthStore()
-  const [status, setStatus] = useState<'loading' | 'no-ticket' | 'redirecting' | 'error'>('loading')
+  const [status, setStatus] = useState<'loading' | 'no-ticket' | 'joined' | 'error'>('loading')
+  const containerRef = useRef<HTMLDivElement>(null)
+  const zegoRef = useRef<InstanceType<typeof ZegoUIKitPrebuilt> | null>(null)
 
   const { data: live, isError } = useQuery({
     queryKey: ['live-stream', id],
@@ -42,15 +43,15 @@ export default function LivePage() {
   })
 
   useEffect(() => {
-    if (!live || !user?.id) return
+    if (!live || !user?.id || !containerRef.current) return
 
-    async function enter() {
+    let cancelled = false
+
+    async function joinLive() {
       const isFree = !live!.ticket_price
-      const isCreator = live!.creator_id === user!.id
-      const isLive = live!.status === 'live'
 
-      // Se é pago e nao é o criador, verifica ticket
-      if (!isFree && !isCreator) {
+      // Verifica ingresso se for paga
+      if (!isFree) {
         const hasTicket = await checkTicket(live!.id, user!.id)
         if (!hasTicket) {
           setStatus('no-ticket')
@@ -58,88 +59,117 @@ export default function LivePage() {
         }
       }
 
-      // Redireciona para live-canvas
+      if (cancelled) return
+
+      // Gera token e entra na live como viewer
       const userName = profile?.full_name ?? user!.email?.split('@')[0] ?? 'Viewer'
-      const url = `${LIVE_CANVAS_BASE}/live?room=${live!.id}&mode=viewer&userName=${encodeURIComponent(userName)}&userID=${user!.id}`
+      const token = await generateToken(live!.id, user!.id, userName)
 
-      setStatus('redirecting')
+      const zp = ZegoUIKitPrebuilt.create(token)
+      zegoRef.current = zp
 
-      if (isLive) {
-        // Live ativa — redireciona direto
-        window.location.href = url
-      } else {
-        // Live agendada — abre em nova aba
-        window.open(url, '_blank', 'noopener,noreferrer')
-        navigate(-1)
-      }
+      zp.joinRoom({
+        container: containerRef.current!,
+        scenario: {
+          mode: ZegoUIKitPrebuilt.LiveStreaming,
+          config: {
+            role: ZegoUIKitPrebuilt.Audience,
+          },
+        },
+        showPreJoinView: false,
+        showLeavingView: false,
+        showRoomTimer: true,
+        onLeaveRoom: () => {
+          navigate(-1)
+        },
+      })
+
+      setStatus('joined')
     }
 
-    enter().catch(() => setStatus('error'))
+    joinLive().catch(() => {
+      if (!cancelled) setStatus('error')
+    })
+
+    return () => {
+      cancelled = true
+      if (zegoRef.current) {
+        zegoRef.current.destroy()
+        zegoRef.current = null
+      }
+    }
   }, [live, user?.id])
 
-  if (isError || status === 'error') {
-    return (
-      <div className="flex flex-col min-h-full bg-[hsl(var(--background))]">
-        <Header onBack={() => navigate(-1)} />
-        <main className="flex-1 flex items-center justify-center px-8">
-          <div className="text-center">
-            <p className="text-sm text-[hsl(var(--muted-foreground))]">
-              Não foi possível carregar a live. Tente novamente.
-            </p>
-            <button
-              onClick={() => navigate(-1)}
-              className="mt-4 text-sm text-[hsl(var(--primary))] underline"
-            >
-              Voltar
-            </button>
-          </div>
-        </main>
-      </div>
-    )
-  }
-
-  if (status === 'no-ticket') {
-    return (
-      <div className="flex flex-col min-h-full bg-[hsl(var(--background))]">
-        <Header onBack={() => navigate(-1)} />
-        <main className="flex-1 flex items-center justify-center px-8">
-          <div className="text-center">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-amber-500/10 flex items-center justify-center">
-              <ShieldAlert size={28} className="text-amber-500" />
-            </div>
-            <p className="text-sm font-medium text-[hsl(var(--foreground))]">
-              Ingresso necessário
-            </p>
-            <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-              Você precisa comprar um ingresso para acessar essa live.
-            </p>
-            <button
-              onClick={() => navigate(-1)}
-              className="mt-6 px-6 py-2.5 rounded-xl bg-[hsl(var(--primary))] text-white text-sm font-semibold hover:opacity-90 active:scale-[0.98] transition-all"
-            >
-              Voltar ao perfil
-            </button>
-          </div>
-        </main>
-      </div>
-    )
-  }
-
-  // Loading / redirecting
   return (
-    <div className="flex flex-col min-h-full bg-[hsl(var(--background))]">
-      <Header onBack={() => navigate(-1)} />
-      <main className="flex-1 flex items-center justify-center px-8">
-        <div className="text-center">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-500/10 flex items-center justify-center">
-            <Radio size={28} className="text-red-500 animate-pulse" />
-          </div>
-          <p className="text-sm text-[hsl(var(--muted-foreground))]">
-            {status === 'redirecting' ? 'Entrando na live...' : 'Conectando à live...'}
-          </p>
+    <>
+      {/* No-ticket overlay */}
+      {status === 'no-ticket' && (
+        <div className="fixed inset-0 z-[60] bg-[hsl(var(--background))] flex flex-col min-h-screen">
+          <Header onBack={() => navigate(-1)} />
+          <main className="flex-1 flex items-center justify-center px-8">
+            <div className="text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-amber-500/10 flex items-center justify-center">
+                <ShieldAlert size={28} className="text-amber-500" />
+              </div>
+              <p className="text-sm font-medium text-[hsl(var(--foreground))]">
+                Ingresso necessario
+              </p>
+              <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
+                Voce precisa comprar um ingresso para acessar essa live.
+              </p>
+              <button
+                onClick={() => navigate(-1)}
+                className="mt-6 px-6 py-2.5 rounded-xl bg-[hsl(var(--primary))] text-white text-sm font-semibold hover:opacity-90 active:scale-[0.98] transition-all"
+              >
+                Voltar ao perfil
+              </button>
+            </div>
+          </main>
         </div>
-      </main>
-    </div>
+      )}
+
+      {/* Error overlay */}
+      {(isError || status === 'error') && (
+        <div className="fixed inset-0 z-[60] bg-[hsl(var(--background))] flex flex-col min-h-screen">
+          <Header onBack={() => navigate(-1)} />
+          <main className="flex-1 flex items-center justify-center px-8">
+            <div className="text-center">
+              <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                Nao foi possivel carregar a live. Tente novamente.
+              </p>
+              <button
+                onClick={() => navigate(-1)}
+                className="mt-4 text-sm text-[hsl(var(--primary))] underline"
+              >
+                Voltar
+              </button>
+            </div>
+          </main>
+        </div>
+      )}
+
+      {/* Loading overlay */}
+      {status === 'loading' && (
+        <div className="fixed inset-0 z-[60] bg-[hsl(var(--background))] flex flex-col min-h-screen">
+          <Header onBack={() => navigate(-1)} />
+          <main className="flex-1 flex items-center justify-center px-8">
+            <div className="text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-500/10 flex items-center justify-center">
+                <Radio size={28} className="text-red-500 animate-pulse" />
+              </div>
+              <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                Conectando a live...
+              </p>
+            </div>
+          </main>
+        </div>
+      )}
+
+      {/* Container persistente do ZegoCloud — nunca e desmontado */}
+      <div className="fixed inset-0 z-50 bg-black">
+        <div ref={containerRef} className="w-full h-full" />
+      </div>
+    </>
   )
 }
 

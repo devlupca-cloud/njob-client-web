@@ -5,7 +5,10 @@ import { ArrowLeft, Check, Star, Zap, Crown, Settings } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { APP_URL } from '@/lib/config'
+import { formatDate } from '@/lib/utils'
+import { useToast } from '@/components/ui/Toast'
 import type { SubscriptionPlan, CreatorSubscription } from '@/types'
+import { useTranslation } from 'react-i18next'
 
 
 // ─── Fetch ────────────────────────────────────────────────────────────────────
@@ -38,18 +41,10 @@ async function fetchPlansAndSubscription(userId: string): Promise<{
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function formatPrice(price: number, interval: 'monthly' | 'yearly'): string {
+// Formata preço de plano com sufixo de intervalo (wrapper específico deste contexto)
+function formatPlanPrice(price: number, interval: 'monthly' | 'yearly'): string {
   const formatted = price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
   return `${formatted}/${interval === 'monthly' ? 'mês' : 'ano'}`
-}
-
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return '—'
-  return new Date(dateStr).toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  })
 }
 
 // ─── Plan Icon ────────────────────────────────────────────────────────────────
@@ -75,6 +70,7 @@ function PlanCard({
   isCurrent: boolean
   onSubscribe: (plan: SubscriptionPlan) => void
 }) {
+  const { t } = useTranslation()
   return (
     <div
       className={`relative bg-[hsl(var(--card))] rounded-2xl overflow-hidden border transition-all ${
@@ -89,7 +85,7 @@ function PlanCard({
       {isPopular && !isCurrent && (
         <div className="absolute top-0 right-0">
           <div className="bg-[hsl(var(--primary))] text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl">
-            POPULAR
+            {t('subscription.popular')}
           </div>
         </div>
       )}
@@ -98,7 +94,7 @@ function PlanCard({
       {isCurrent && (
         <div className="absolute top-0 right-0">
           <div className="bg-green-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl">
-            ATUAL
+            {t('subscription.current')}
           </div>
         </div>
       )}
@@ -121,7 +117,7 @@ function PlanCard({
         {/* Preço */}
         <div>
           <span className="text-2xl font-black text-[hsl(var(--primary))]">
-            {formatPrice(plan.price_monthly ?? plan.price ?? 0, 'monthly')}
+            {formatPlanPrice(plan.price_monthly ?? plan.price ?? 0, 'monthly')}
           </span>
         </div>
 
@@ -156,7 +152,7 @@ function PlanCard({
               : 'bg-[hsl(var(--secondary))] text-[hsl(var(--foreground))] hover:bg-[hsl(var(--border))]'
           }`}
         >
-          {isCurrent ? 'Plano atual' : 'Contratar plano'}
+          {isCurrent ? t('subscription.currentPlan') : t('subscription.contractPlan')}
         </button>
       </div>
     </div>
@@ -176,22 +172,23 @@ function ActiveSubscriptionCard({
   onManage: () => void
   isManaging: boolean
 }) {
+  const { t } = useTranslation()
   if (!plan) return null
 
   return (
     <div className="bg-[hsl(var(--card))] border border-green-500/40 rounded-2xl overflow-hidden">
       <div className="bg-green-500/10 px-4 py-2.5 flex items-center gap-2">
         <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-        <span className="text-sm font-semibold text-green-400">Assinatura ativa</span>
+        <span className="text-sm font-semibold text-green-400">{t('subscription.activeSubscription')}</span>
       </div>
       <div className="px-4 py-4 flex flex-col gap-1.5">
         <p className="text-base font-bold text-[hsl(var(--foreground))]">{plan.name}</p>
         <p className="text-sm text-[hsl(var(--muted-foreground))]">
-          {formatPrice(plan.price_monthly ?? plan.price ?? 0, 'monthly')}
+          {formatPlanPrice(plan.price_monthly ?? plan.price ?? 0, 'monthly')}
         </p>
         {sub.expires_at && (
           <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-            Renova em {formatDate(sub.expires_at)}
+            {t('subscription.renewsAt', { date: sub.expires_at ? formatDate(sub.expires_at) : '—' })}
           </p>
         )}
         <button
@@ -204,30 +201,9 @@ function ActiveSubscriptionCard({
           ) : (
             <Settings size={14} />
           )}
-          {isManaging ? 'Abrindo...' : 'Gerenciar assinatura'}
+          {isManaging ? t('subscription.opening') : t('subscription.manageSubscription')}
         </button>
       </div>
-    </div>
-  )
-}
-
-// ─── Toast Notification ───────────────────────────────────────────────────────
-
-function Toast({ message, type, onClose }: { message: string; type: 'success' | 'error'; onClose: () => void }) {
-  useEffect(() => {
-    const timer = setTimeout(onClose, 5000)
-    return () => clearTimeout(timer)
-  }, [onClose])
-
-  return (
-    <div
-      className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-3 rounded-xl text-sm font-medium shadow-lg transition-all ${
-        type === 'success'
-          ? 'bg-green-500 text-white'
-          : 'bg-red-500 text-white'
-      }`}
-    >
-      {message}
     </div>
   )
 }
@@ -239,7 +215,8 @@ export default function SubscriptionPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const user = useAuthStore((s) => s.user)
   const queryClient = useQueryClient()
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const { t } = useTranslation()
+  const { toast } = useToast()
   const [isManaging, setIsManaging] = useState(false)
 
   const { data, isLoading, isError } = useQuery({
@@ -255,14 +232,14 @@ export default function SubscriptionPage() {
     const canceled = searchParams.get('canceled')
 
     if (sessionId) {
-      setToast({ message: 'Assinatura realizada com sucesso!', type: 'success' })
+      toast({ title: t('subscription.success'), type: 'success' })
       queryClient.invalidateQueries({ queryKey: ['subscription', user?.id] })
       setSearchParams({}, { replace: true })
     } else if (canceled === 'true') {
-      setToast({ message: 'Checkout cancelado.', type: 'error' })
+      toast({ title: t('subscription.checkoutCanceled'), type: 'error' })
       setSearchParams({}, { replace: true })
     }
-  }, [searchParams, setSearchParams, queryClient, user?.id])
+  }, [searchParams, setSearchParams, queryClient, user?.id, t])
 
   const plans = data?.plans ?? []
   const activeSubscriptions = data?.activeSubscriptions ?? []
@@ -287,8 +264,8 @@ export default function SubscriptionPage() {
         window.location.href = data.checkout_url
       }
     } catch (err) {
-      console.error('Erro ao criar checkout de assinatura:', err)
-      setToast({ message: 'Erro ao iniciar checkout. Tente novamente.', type: 'error' })
+      console.error('Checkout error:', err)
+      toast({ title: t('subscription.checkoutError'), type: 'error' })
     }
   }
 
@@ -305,8 +282,8 @@ export default function SubscriptionPage() {
         window.location.href = data.portal_url
       }
     } catch (err) {
-      console.error('Erro ao abrir portal:', err)
-      setToast({ message: 'Erro ao abrir portal de gerenciamento.', type: 'error' })
+      console.error('Portal error:', err)
+      toast({ title: t('subscription.portalError'), type: 'error' })
     } finally {
       setIsManaging(false)
     }
@@ -315,22 +292,17 @@ export default function SubscriptionPage() {
   return (
     <div className="flex flex-col min-h-full bg-[hsl(var(--background))]">
 
-      {/* Toast */}
-      {toast && (
-        <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
-      )}
-
       {/* Header */}
       <header className="sticky top-0 z-10 bg-[hsl(var(--background))] border-b border-[hsl(var(--border))]">
         <div className="relative flex items-center justify-center h-7 max-w-3xl mx-auto px-4 pt-4 pb-3">
           <button
             onClick={() => navigate(-1)}
             className="absolute left-0 w-7 h-7 flex items-center justify-center rounded-full bg-[hsl(var(--secondary))] text-[hsl(var(--foreground))]"
-            aria-label="Voltar"
+            aria-label={t('common.back')}
           >
             <ArrowLeft size={16} />
           </button>
-          <span className="text-base font-semibold text-[hsl(var(--foreground))]">Assinatura</span>
+          <span className="text-base font-semibold text-[hsl(var(--foreground))]">{t('subscription.title')}</span>
         </div>
       </header>
 
@@ -345,7 +317,7 @@ export default function SubscriptionPage() {
       {isError && (
         <div className="flex-1 flex items-center justify-center px-8">
           <p className="text-sm text-[hsl(var(--muted-foreground))] text-center">
-            Erro ao carregar planos. Tente novamente.
+            {t('subscription.loadError')}
           </p>
         </div>
       )}
@@ -358,7 +330,7 @@ export default function SubscriptionPage() {
           {activeSubscriptions.length > 0 && (
             <div className="flex flex-col gap-3">
               <h2 className="text-sm font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wider">
-                Minha Assinatura
+                {t('subscription.mySubscription')}
               </h2>
               {activeSubscriptions.map((sub) => (
                 <ActiveSubscriptionCard
@@ -375,13 +347,13 @@ export default function SubscriptionPage() {
           {/* Planos disponíveis */}
           <div className="flex flex-col gap-3">
             <h2 className="text-sm font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wider">
-              {activeSubscriptions.length > 0 ? 'Outros Planos' : 'Planos Disponíveis'}
+              {activeSubscriptions.length > 0 ? t('subscription.otherPlans') : t('subscription.availablePlans')}
             </h2>
 
             {plans.length === 0 ? (
               <div className="py-12 text-center">
                 <p className="text-sm text-[hsl(var(--muted-foreground))]">
-                  Nenhum plano disponível no momento.
+                  {t('subscription.noPlansNow')}
                 </p>
               </div>
             ) : (
@@ -402,7 +374,7 @@ export default function SubscriptionPage() {
 
           {/* Nota de rodapé */}
           <p className="text-xs text-[hsl(var(--muted-foreground))] text-center pb-2">
-            Cancele a qualquer momento. Sem fidelidade.
+            {t('subscription.cancelAnytime')}
           </p>
         </main>
       )}

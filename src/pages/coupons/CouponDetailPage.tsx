@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { ArrowLeft, Copy, Check, Calendar, DollarSign, Store } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { formatCurrency, formatDate } from '@/lib/utils'
 import type { Coupon } from '@/types'
 
 // ─── Fetch ────────────────────────────────────────────────────────────────────
@@ -22,16 +24,6 @@ function isCouponActive(coupon: Coupon): boolean {
     return new Date(coupon.valid_until) > new Date()
   }
   return true
-}
-
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return '—'
-  const d = new Date(dateStr)
-  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
-}
-
-function formatCurrency(value: number): string {
-  return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
 // ─── Info Row ─────────────────────────────────────────────────────────────────
@@ -62,6 +54,7 @@ function InfoRow({
 
 export default function CouponDetailPage() {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const [copied, setCopied] = useState(false)
 
@@ -91,11 +84,11 @@ export default function CouponDetailPage() {
           <button
             onClick={() => navigate(-1)}
             className="absolute left-0 w-7 h-7 flex items-center justify-center rounded-full bg-[hsl(var(--secondary))] text-[hsl(var(--foreground))]"
-            aria-label="Voltar"
+            aria-label={t('common.back')}
           >
             <ArrowLeft size={16} />
           </button>
-          <span className="text-base font-semibold text-[hsl(var(--foreground))]">Detalhe do Cupom</span>
+          <span className="text-base font-semibold text-[hsl(var(--foreground))]">{t('coupons.detail.title')}</span>
         </div>
       </header>
 
@@ -110,7 +103,7 @@ export default function CouponDetailPage() {
       {isError && (
         <div className="flex-1 flex items-center justify-center px-8">
           <p className="text-sm text-[hsl(var(--muted-foreground))] text-center">
-            Não foi possível carregar o cupom.
+            {t('coupons.detail.loadError')}
           </p>
         </div>
       )}
@@ -141,7 +134,7 @@ export default function CouponDetailPage() {
                   : 'bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))]'
               }`}
             >
-              {active ? 'Ativo' : 'Expirado'}
+              {active ? t('coupons.active') : t('coupons.expired')}
             </span>
           </div>
 
@@ -151,7 +144,7 @@ export default function CouponDetailPage() {
             {/* Header do card */}
             <div className="px-4 py-3 border-b border-dashed border-[hsl(var(--border))]">
               <p className="text-xs text-[hsl(var(--muted-foreground))] font-medium uppercase tracking-wider text-center">
-                Código Promocional
+                {t('coupons.detail.promoCode')}
               </p>
             </div>
 
@@ -171,12 +164,12 @@ export default function CouponDetailPage() {
                 {copied ? (
                   <>
                     <Check size={13} />
-                    Copiado!
+                    {t('common.copied')}
                   </>
                 ) : (
                   <>
                     <Copy size={13} />
-                    Copiar
+                    {t('common.copy')}
                   </>
                 )}
               </button>
@@ -187,18 +180,18 @@ export default function CouponDetailPage() {
           <div className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-2xl px-4">
             <InfoRow
               icon={<DollarSign size={16} />}
-              label="Tipo de desconto"
-              value={coupon.discount_type === 'percentage' ? 'Percentual (%)' : 'Valor fixo (R$)'}
+              label={t('coupons.detail.discountType')}
+              value={coupon.discount_type === 'percentage' ? t('coupons.detail.percentage') : t('coupons.detail.fixedValue')}
             />
             <InfoRow
               icon={<Calendar size={16} />}
-              label="Válido até"
-              value={formatDate(coupon.valid_until)}
+              label={t('coupons.detail.validUntil')}
+              value={coupon.valid_until ? formatDate(coupon.valid_until) : '—'}
             />
             {coupon.store_name && (
               <InfoRow
                 icon={<Store size={16} />}
-                label="Loja"
+                label={t('coupons.detail.store')}
                 value={coupon.store_name}
               />
             )}
@@ -207,7 +200,7 @@ export default function CouponDetailPage() {
           {/* Descrição */}
           {coupon.description && (
             <div className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-2xl px-4 py-4">
-              <p className="text-xs text-[hsl(var(--muted-foreground))] mb-1">Descrição</p>
+              <p className="text-xs text-[hsl(var(--muted-foreground))] mb-1">{t('common.description')}</p>
               <p className="text-sm text-[hsl(var(--foreground))]">{coupon.description}</p>
             </div>
           )}

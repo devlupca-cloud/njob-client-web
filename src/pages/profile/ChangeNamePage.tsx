@@ -6,21 +6,23 @@ import { z } from 'zod'
 import { ArrowLeft, Loader2, CheckCircle2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
-
-const schema = z.object({
-  full_name: z
-    .string()
-    .min(2, 'Nome deve ter pelo menos 2 caracteres')
-    .max(100, 'Nome muito longo'),
-})
-
-type FormData = z.infer<typeof schema>
+import { useTranslation } from 'react-i18next'
 
 export default function ChangeNamePage() {
   const navigate = useNavigate()
   const { user, profile, setProfile } = useAuthStore()
+  const { t } = useTranslation()
   const [serverError, setServerError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+
+  const schema = z.object({
+    full_name: z
+      .string()
+      .min(2, t('profile.changeName.minLength'))
+      .max(100, t('profile.changeName.tooLong')),
+  })
+
+  type FormData = z.infer<typeof schema>
 
   const {
     register,
@@ -49,7 +51,6 @@ export default function ChangeNamePage() {
 
       if (error) throw error
 
-      // Atualiza o store
       setProfile({ ...profile!, full_name: data.full_name })
 
       setSuccess(true)
@@ -57,7 +58,7 @@ export default function ChangeNamePage() {
         navigate(-1)
       }, 1200)
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Erro ao salvar nome. Tente novamente.'
+      const message = err instanceof Error ? err.message : t('profile.changeName.genericError')
       setServerError(message)
     }
   }
@@ -70,31 +71,26 @@ export default function ChangeNamePage() {
           <button
             onClick={() => navigate(-1)}
             className="absolute left-4 flex items-center justify-center w-8 h-8 rounded-full hover:bg-[hsl(var(--card))] transition-colors"
-            aria-label="Voltar"
+            aria-label={t('common.back')}
           >
             <ArrowLeft className="w-5 h-5 text-[hsl(var(--foreground))]" />
           </button>
-          <h1 className="text-base font-semibold text-[hsl(var(--foreground))]">Alterar nome</h1>
+          <h1 className="text-base font-semibold text-[hsl(var(--foreground))]">{t('profile.changeName.title')}</h1>
         </div>
       </div>
 
-      {/* Conteúdo */}
       <div className="px-4 pt-10">
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6" noValidate>
-          {/* Campo nome */}
           <div className="flex flex-col gap-1.5">
-            <label
-              htmlFor="full_name"
-              className="text-sm font-bold text-[hsl(var(--foreground))]"
-            >
-              Nome completo
+            <label htmlFor="full_name" className="text-sm font-bold text-[hsl(var(--foreground))]">
+              {t('profile.changeName.label')}
             </label>
             <div className="relative">
               <input
                 id="full_name"
                 type="text"
                 autoComplete="name"
-                placeholder="Digite seu nome completo"
+                placeholder={t('profile.changeName.placeholder')}
                 {...register('full_name')}
                 className="w-full h-12 px-4 rounded-xl bg-[hsl(var(--card))] border border-[hsl(var(--border))] text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))] focus:border-transparent transition-all"
               />
@@ -104,25 +100,21 @@ export default function ChangeNamePage() {
             )}
           </div>
 
-          {/* Erro do servidor */}
           {serverError && (
             <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3">
               <p className="text-sm text-red-400">{serverError}</p>
             </div>
           )}
 
-          {/* Sucesso */}
           {success && (
             <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/30 rounded-xl px-4 py-3">
               <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
-              <p className="text-sm text-green-400">Nome alterado com sucesso!</p>
+              <p className="text-sm text-green-400">{t('profile.changeName.success')}</p>
             </div>
           )}
 
-          {/* Spacer */}
           <div className="flex-1" />
 
-          {/* Botão salvar */}
           <button
             type="submit"
             disabled={isSubmitting || !hasChanged || success}
@@ -136,10 +128,10 @@ export default function ChangeNamePage() {
             {isSubmitting ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Salvando...
+                {t('common.saving')}
               </>
             ) : (
-              'Confirmar'
+              t('common.confirm')
             )}
           </button>
         </form>

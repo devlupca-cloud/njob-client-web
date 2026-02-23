@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Check } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 interface Language {
   code: string
@@ -30,13 +31,10 @@ const languages: Language[] = [
   },
 ]
 
-const STORAGE_KEY = 'njob-language'
-
 export default function ChangeLanguagePage() {
   const navigate = useNavigate()
-  const [selected, setSelected] = useState<string>(
-    () => localStorage.getItem(STORAGE_KEY) ?? 'pt-BR'
-  )
+  const { t, i18n } = useTranslation()
+  const [selected, setSelected] = useState<string>(() => i18n.language)
   const [saved, setSaved] = useState(false)
 
   const handleSelect = (code: string) => {
@@ -45,7 +43,7 @@ export default function ChangeLanguagePage() {
   }
 
   const handleSave = () => {
-    localStorage.setItem(STORAGE_KEY, selected)
+    i18n.changeLanguage(selected)
     setSaved(true)
     setTimeout(() => {
       navigate(-1)
@@ -60,22 +58,21 @@ export default function ChangeLanguagePage() {
           <button
             onClick={() => navigate(-1)}
             className="absolute left-4 flex items-center justify-center w-8 h-8 rounded-full hover:bg-[hsl(var(--card))] transition-colors"
-            aria-label="Voltar"
+            aria-label={t('common.back')}
           >
             <ArrowLeft className="w-5 h-5 text-[hsl(var(--foreground))]" />
           </button>
-          <h1 className="text-base font-semibold text-[hsl(var(--foreground))]">Idioma</h1>
+          <h1 className="text-base font-semibold text-[hsl(var(--foreground))]">{t('profile.changeLanguage.title')}</h1>
         </div>
       </div>
 
-      {/* Conteúdo */}
+      {/* Content */}
       <div className="px-4 pt-8 flex flex-col gap-6">
-        {/* Descrição */}
         <p className="text-sm text-[hsl(var(--muted-foreground))]">
-          Selecione o idioma de sua preferência.
+          {t('profile.changeLanguage.subtitle')}
         </p>
 
-        {/* Lista de idiomas */}
+        {/* Language list */}
         <div className="bg-[hsl(var(--card))] rounded-2xl overflow-hidden border border-[hsl(var(--border))]">
           {languages.map(({ code, label, nativeLabel, flag }, index) => {
             const isSelected = selected === code
@@ -89,10 +86,7 @@ export default function ChangeLanguagePage() {
                       : 'hover:bg-[hsl(var(--primary)/0.05)] active:bg-[hsl(var(--primary)/0.1)]'
                     }`}
                 >
-                  {/* Flag */}
                   <span className="text-2xl leading-none">{flag}</span>
-
-                  {/* Labels */}
                   <div className="flex-1">
                     <p className={`text-sm font-medium ${isSelected ? 'text-[hsl(var(--primary))]' : 'text-[hsl(var(--foreground))]'}`}>
                       {label}
@@ -103,8 +97,6 @@ export default function ChangeLanguagePage() {
                       </p>
                     )}
                   </div>
-
-                  {/* Check icon */}
                   {isSelected && (
                     <div className="w-6 h-6 rounded-full bg-[hsl(var(--primary))] flex items-center justify-center shrink-0">
                       <Check className="w-3.5 h-3.5 text-[hsl(var(--primary-foreground))]" strokeWidth={3} />
@@ -119,7 +111,7 @@ export default function ChangeLanguagePage() {
           })}
         </div>
 
-        {/* Botão salvar */}
+        {/* Save button */}
         <button
           onClick={handleSave}
           disabled={saved}
@@ -133,10 +125,10 @@ export default function ChangeLanguagePage() {
           {saved ? (
             <>
               <Check className="w-4 h-4" />
-              Salvo!
+              {t('profile.changeLanguage.saved')}
             </>
           ) : (
-            'Salvar preferência'
+            t('profile.changeLanguage.savePreference')
           )}
         </button>
       </div>

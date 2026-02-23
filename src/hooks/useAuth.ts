@@ -2,15 +2,18 @@ import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 
 export function useAuth() {
-  const { session, user, profile, isLoading, clear } =
+  const { session, user, profile, isLoading, isGuest, setGuest, clear } =
     useAuthStore()
 
   // Auth initialization is handled by AuthProvider.
   // This hook only exposes state + auth methods.
 
+  const enterAsGuest = () => setGuest(true)
+
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
+    setGuest(false)
   }
 
   const signUp = async (email: string, password: string, fullName: string, dateBirth?: string) => {
@@ -20,6 +23,7 @@ export function useAuth() {
       options: { data: { full_name: fullName } },
     })
     if (error) throw error
+    setGuest(false)
 
     if (data.user) {
       const { error: profileError } = await supabase.from('profiles').insert({
@@ -57,7 +61,18 @@ export function useAuth() {
     if (error) throw error
   }
 
-  const updatePassword = async (newPassword: string) => {
+  const updatePassword = async (currentPassword: string, newPassword: string) => {
+    // Re-authenticate with current password to verify identity
+    const email = user?.email
+    if (!email) throw new Error('Usuário não encontrado')
+
+    const { error: reAuthError } = await supabase.auth.signInWithPassword({
+      email,
+      password: currentPassword,
+    })
+    if (reAuthError) throw new Error('Senha atual incorreta')
+
+    // Now update to the new password
     const { error } = await supabase.auth.updateUser({ password: newPassword })
     if (error) throw error
   }
@@ -67,7 +82,9 @@ export function useAuth() {
     user,
     profile,
     isLoading,
+    isGuest,
     isAuthenticated: !!session,
+    enterAsGuest,
     signIn,
     signUp,
     signOut,

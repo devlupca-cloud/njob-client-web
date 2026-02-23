@@ -5,23 +5,25 @@ import { z } from 'zod'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { AuthInput } from '@/components/ui/AuthInput'
-
-const schema = z.object({
-  email: z
-    .string()
-    .min(1, 'E-mail é obrigatório')
-    .email('E-mail inválido'),
-})
-
-type FormData = z.infer<typeof schema>
+import { useTranslation } from 'react-i18next'
 
 export default function ForgotPasswordPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const prefillEmail = searchParams.get('email') ?? ''
   const { sendPasswordResetOtp } = useAuth()
+  const { t } = useTranslation()
   const [serverError, setServerError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+
+  const schema = z.object({
+    email: z
+      .string()
+      .min(1, t('auth.register.emailRequired'))
+      .email(t('auth.register.emailInvalid')),
+  })
+
+  type FormData = z.infer<typeof schema>
 
   const {
     register,
@@ -38,20 +40,20 @@ export default function ForgotPasswordPage() {
     setSuccessMessage(null)
     try {
       await sendPasswordResetOtp(data.email)
-      setSuccessMessage('Código enviado! Verifique sua caixa de entrada.')
+      setSuccessMessage(t('auth.forgotPassword.codeSent'))
       setTimeout(() => {
         navigate(`/verify-otp?email=${encodeURIComponent(data.email)}`)
       }, 1500)
     } catch (err: unknown) {
       const message =
-        err instanceof Error ? err.message : 'Erro ao enviar e-mail. Tente novamente.'
+        err instanceof Error ? err.message : t('auth.forgotPassword.genericError')
 
       if (
         message.toLowerCase().includes('not found') ||
         message.toLowerCase().includes('user') ||
         message.toLowerCase().includes('email')
       ) {
-        setServerError('E-mail não encontrado. Verifique e tente novamente.')
+        setServerError(t('auth.forgotPassword.emailNotFound'))
       } else {
         setServerError(message)
       }
@@ -81,7 +83,7 @@ export default function ForgotPasswordPage() {
             <path d="M19 12H5" />
             <path d="M12 19l-7-7 7-7" />
           </svg>
-          Voltar ao login
+          {t('auth.forgotPassword.backToLogin')}
         </Link>
 
         {/* Header */}
@@ -105,11 +107,10 @@ export default function ForgotPasswordPage() {
 
           <div className="flex flex-col gap-2">
             <h1 className="text-3xl font-bold text-[hsl(var(--foreground))] tracking-tight">
-              Recuperação de senha
+              {t('auth.forgotPassword.title')}
             </h1>
             <p className="text-[hsl(var(--muted-foreground))] text-sm leading-relaxed">
-              Preencha o campo abaixo com o e-mail cadastrado na sua conta. Enviaremos um código
-              para redefinição de senha.
+              {t('auth.forgotPassword.subtitle')}
             </p>
           </div>
         </div>
@@ -118,9 +119,9 @@ export default function ForgotPasswordPage() {
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6" noValidate>
 
           <AuthInput
-            label="E-mail"
+            label={t('common.email')}
             type="email"
-            placeholder="Digite seu e-mail"
+            placeholder={t('auth.forgotPassword.emailPlaceholder')}
             autoComplete="email"
             autoCapitalize="none"
             {...register('email')}
@@ -186,10 +187,10 @@ export default function ForgotPasswordPage() {
             {isSubmitting ? (
               <>
                 <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Enviando...
+                {t('auth.forgotPassword.submitting')}
               </>
             ) : (
-              'Recuperar acesso'
+              t('auth.forgotPassword.submit')
             )}
           </button>
         </form>
@@ -197,7 +198,7 @@ export default function ForgotPasswordPage() {
         {/* Manual navigate to OTP */}
         <div className="text-center">
           <p className="text-sm text-[hsl(var(--muted-foreground))]">
-            Já tem o código?{' '}
+            {t('auth.forgotPassword.haveCode')}{' '}
             <button
               type="button"
               onClick={() => {
@@ -206,7 +207,7 @@ export default function ForgotPasswordPage() {
               }}
               className="font-semibold text-[hsl(var(--primary))] hover:text-[hsl(var(--primary)/0.8)] transition-colors"
             >
-              Inserir código
+              {t('auth.forgotPassword.enterCode')}
             </button>
           </p>
         </div>

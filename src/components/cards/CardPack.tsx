@@ -1,21 +1,12 @@
 import { Package, ChevronRight } from 'lucide-react'
 import type { PackInfo } from '@/types'
+import { formatCurrency } from '@/lib/utils'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface CardPackProps {
   pack: PackInfo
   onView: (pack: PackInfo) => void
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function formatPrice(value: number): string {
-  return value.toLocaleString('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-    minimumFractionDigits: 2,
-  })
 }
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
@@ -67,7 +58,7 @@ export default function CardPack({ pack, onView }: CardPackProps) {
         {/* Price badge */}
         <div className="absolute bottom-2 right-2">
           <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-[hsl(var(--primary))] text-white shadow-md">
-            {formatPrice(price)}
+            {formatCurrency(price)}
           </span>
         </div>
       </div>

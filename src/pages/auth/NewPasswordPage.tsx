@@ -4,28 +4,13 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
+import { supabase } from '@/lib/supabase'
 import { AuthInput } from '@/components/ui/AuthInput'
-
-const schema = z
-  .object({
-    newPassword: z
-      .string()
-      .min(1, 'Nova senha é obrigatória')
-      .min(6, 'A senha deve ter pelo menos 6 caracteres')
-      .regex(/[A-Za-z]/, 'A senha deve conter pelo menos uma letra')
-      .regex(/[0-9]/, 'A senha deve conter pelo menos um número'),
-    confirmPassword: z
-      .string()
-      .min(1, 'Confirmação de senha é obrigatória'),
-  })
-  .refine((data) => data.newPassword === data.confirmPassword, {
-    message: 'As senhas não coincidem',
-    path: ['confirmPassword'],
-  })
-
-type FormData = z.infer<typeof schema>
+import { useTranslation } from 'react-i18next'
 
 function PasswordStrengthBar({ password }: { password: string }) {
+  const { t } = useTranslation()
+
   const getStrength = (pw: string): { level: number; label: string; color: string } => {
     if (!pw) return { level: 0, label: '', color: '' }
     let score = 0
@@ -35,10 +20,10 @@ function PasswordStrengthBar({ password }: { password: string }) {
     if (/[0-9]/.test(pw)) score++
     if (/[^A-Za-z0-9]/.test(pw)) score++
 
-    if (score <= 1) return { level: 1, label: 'Fraca', color: 'bg-red-500' }
-    if (score <= 2) return { level: 2, label: 'Regular', color: 'bg-orange-500' }
-    if (score <= 3) return { level: 3, label: 'Boa', color: 'bg-yellow-500' }
-    return { level: 4, label: 'Forte', color: 'bg-green-500' }
+    if (score <= 1) return { level: 1, label: t('auth.newPassword.strengthWeak'), color: 'bg-red-500' }
+    if (score <= 2) return { level: 2, label: t('auth.newPassword.strengthFair'), color: 'bg-orange-500' }
+    if (score <= 3) return { level: 3, label: t('auth.newPassword.strengthGood'), color: 'bg-yellow-500' }
+    return { level: 4, label: t('auth.newPassword.strengthStrong'), color: 'bg-green-500' }
   }
 
   const { level, label, color } = getStrength(password)
@@ -64,9 +49,29 @@ function PasswordStrengthBar({ password }: { password: string }) {
 
 export default function NewPasswordPage() {
   const navigate = useNavigate()
-  const { updatePassword, signOut } = useAuth()
+  const { signOut } = useAuth()
+  const { t } = useTranslation()
   const [serverError, setServerError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+
+  const schema = z
+    .object({
+      newPassword: z
+        .string()
+        .min(1, t('auth.newPassword.passwordRequired'))
+        .min(6, t('auth.newPassword.passwordMinLength'))
+        .regex(/[A-Za-z]/, t('auth.newPassword.passwordNeedLetter'))
+        .regex(/[0-9]/, t('auth.newPassword.passwordNeedNumber')),
+      confirmPassword: z
+        .string()
+        .min(1, t('auth.register.confirmPasswordRequired')),
+    })
+    .refine((data) => data.newPassword === data.confirmPassword, {
+      message: t('auth.newPassword.passwordsMismatch'),
+      path: ['confirmPassword'],
+    })
+
+  type FormData = z.infer<typeof schema>
 
   const {
     register,
@@ -83,15 +88,16 @@ export default function NewPasswordPage() {
     setServerError(null)
     setSuccessMessage(null)
     try {
-      await updatePassword(data.newPassword)
-      setSuccessMessage('Senha alterada com sucesso!')
+      const { error } = await supabase.auth.updateUser({ password: data.newPassword })
+      if (error) throw error
+      setSuccessMessage(t('auth.newPassword.success'))
       setTimeout(async () => {
         await signOut()
         navigate('/login', { replace: true })
       }, 1500)
     } catch (err: unknown) {
       const message =
-        err instanceof Error ? err.message : 'Erro ao atualizar senha. Tente novamente.'
+        err instanceof Error ? err.message : t('auth.newPassword.genericError')
       setServerError(message)
     }
   }
@@ -120,10 +126,10 @@ export default function NewPasswordPage() {
 
           <div className="flex flex-col gap-2">
             <h1 className="text-3xl font-bold text-[hsl(var(--foreground))] tracking-tight">
-              Nova senha
+              {t('auth.newPassword.title')}
             </h1>
             <p className="text-[hsl(var(--muted-foreground))] text-sm leading-relaxed">
-              Digite abaixo sua nova senha. Escolha uma senha forte com letras e números.
+              {t('auth.newPassword.subtitle')}
             </p>
           </div>
         </div>
@@ -133,9 +139,9 @@ export default function NewPasswordPage() {
 
           <div className="flex flex-col gap-2">
             <AuthInput
-              label="Nova senha"
+              label={t('auth.newPassword.newPasswordLabel')}
               type="password"
-              placeholder="Digite uma nova senha"
+              placeholder={t('auth.newPassword.newPasswordPlaceholder')}
               autoComplete="new-password"
               {...register('newPassword')}
               error={errors.newPassword?.message}
@@ -144,9 +150,9 @@ export default function NewPasswordPage() {
           </div>
 
           <AuthInput
-            label="Confirmar senha"
+            label={t('auth.newPassword.confirmLabel')}
             type="password"
-            placeholder="Confirme a senha"
+            placeholder={t('auth.newPassword.confirmPlaceholder')}
             autoComplete="new-password"
             {...register('confirmPassword')}
             error={errors.confirmPassword?.message}
@@ -155,13 +161,13 @@ export default function NewPasswordPage() {
           {/* Password requirements */}
           <div className="bg-[hsl(var(--card))] rounded-[var(--radius)] px-4 py-3 border border-[hsl(var(--border))]">
             <p className="text-xs font-semibold text-[hsl(var(--muted-foreground))] mb-2">
-              A senha deve conter:
+              {t('auth.newPassword.requirements')}
             </p>
             <ul className="flex flex-col gap-1">
               {[
-                { label: 'Pelo menos 6 caracteres', met: newPasswordValue.length >= 6 },
-                { label: 'Pelo menos uma letra', met: /[A-Za-z]/.test(newPasswordValue) },
-                { label: 'Pelo menos um número', met: /[0-9]/.test(newPasswordValue) },
+                { label: t('auth.newPassword.reqMinChars'), met: newPasswordValue.length >= 6 },
+                { label: t('auth.newPassword.reqLetter'), met: /[A-Za-z]/.test(newPasswordValue) },
+                { label: t('auth.newPassword.reqNumber'), met: /[0-9]/.test(newPasswordValue) },
               ].map(({ label, met }) => (
                 <li key={label} className="flex items-center gap-2">
                   <span
@@ -255,10 +261,10 @@ export default function NewPasswordPage() {
             {isSubmitting ? (
               <>
                 <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Salvando...
+                {t('auth.newPassword.submitting')}
               </>
             ) : (
-              'Confirmar'
+              t('auth.newPassword.submit')
             )}
           </button>
         </form>

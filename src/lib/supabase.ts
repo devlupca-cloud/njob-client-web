@@ -11,5 +11,10 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
+    flowType: 'implicit',
+    // Bypass Web Locks API to prevent auth from hanging
+    lock: async (_name: string, _acquireTimeout: number, fn: () => Promise<any>) => {
+      return fn()
+    },
   },
 })

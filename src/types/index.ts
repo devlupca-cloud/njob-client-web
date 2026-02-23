@@ -23,7 +23,8 @@ export interface CreatorDescription {
   id: string
   profile_id: string
   bio: string | null
-  category: string | null
+  /** Cidade do creator vinda do campo `cidade` da RPC get_creator_details */
+  city: string | null
   tags: string[]
 }
 
@@ -192,12 +193,12 @@ export interface LiveStream {
 export interface OneOnOneCall {
   id: string
   creator_id: string
-  client_id: string
-  scheduled_at: string
-  duration_minutes: number
-  price: number
+  user_id: string
+  availability_slot_id: string | null
+  scheduled_start_time: string
+  scheduled_duration_minutes: number
+  call_price: number
   status: 'pending' | 'confirmed' | 'completed' | 'cancelled'
-  notes: string | null
 }
 
 // ─── Subscriptions ───────────────────────────────────────────────────────────
@@ -265,18 +266,6 @@ export interface AvailabilitySlot {
 }
 
 // ─── Enums ───────────────────────────────────────────────────────────────────
-
-export type NavPage =
-  | 'home'
-  | 'agenda'
-  | 'chat'
-  | 'notifications'
-  | 'profile'
-  | 'content'
-  | 'coupons'
-  | 'events'
-  | 'favorites'
-  | 'empty'
 
 export type EventType = 'live' | 'call'
 

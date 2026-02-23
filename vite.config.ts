@@ -20,6 +20,7 @@ export default defineConfig({
           'vendor-ui': ['lucide-react', 'clsx', 'tailwind-merge'],
           'vendor-forms': ['react-hook-form', 'zod', '@hookform/resolvers'],
           'vendor-state': ['zustand'],
+          'vendor-zegocloud': ['@zegocloud/zego-uikit-prebuilt'],
         },
       },
     },

@@ -77,6 +77,94 @@ serve(async (req) => {
       );
     }
 
+    // 2.1) VALIDAÇÕES DE VIDEO-CALL: slot já comprado + conflito com live
+    if (product_type === "video-call") {
+      if (!product_id) {
+        throw new Error("product_id (slot_id) é obrigatório para video-call.");
+      }
+
+      // Buscar dados do slot
+      const { data: slotRow, error: slotErr } = await supabaseAdmin
+        .from("creator_availability_slots")
+        .select(`
+          id,
+          slot_time,
+          purchased,
+          availability:creator_availability!inner (
+            availability_date,
+            creator_id
+          )
+        `)
+        .eq("id", product_id)
+        .single();
+
+      if (slotErr || !slotRow) {
+        throw new Error("Slot de disponibilidade não encontrado.");
+      }
+
+      // Verificar se já foi comprado (race condition)
+      if (slotRow.purchased) {
+        throw new Error("Este horário já foi reservado por outro cliente.");
+      }
+
+      // Verificar conflito com lives existentes
+      const slotDate = (slotRow as any).availability.availability_date;
+      const slotTime = slotRow.slot_time;
+      const callDuration = duration === 60 ? 60 : 30;
+
+      const dayStart = `${slotDate}T00:00:00`;
+      const dayEnd = `${slotDate}T23:59:59`;
+
+      const { data: lives } = await supabaseAdmin
+        .from("live_streams")
+        .select("scheduled_start_time, estimated_duration_minutes")
+        .eq("creator_id", (slotRow as any).availability.creator_id)
+        .in("status", ["scheduled", "live"])
+        .gte("scheduled_start_time", dayStart)
+        .lte("scheduled_start_time", dayEnd);
+
+      const callStart = new Date(`${slotDate}T${slotTime}`).getTime();
+      const callEnd = callStart + callDuration * 60 * 1000;
+
+      if (lives && lives.length > 0) {
+        for (const live of lives) {
+          const liveStart = new Date(live.scheduled_start_time).getTime();
+          const liveEnd =
+            liveStart + (live.estimated_duration_minutes ?? 60) * 60 * 1000;
+
+          if (callStart < liveEnd && callEnd > liveStart) {
+            throw new Error(
+              "Não é possível agendar videochamada neste horário pois existe uma live programada.",
+            );
+          }
+        }
+      }
+
+      // Verificar conflito com outras videochamadas confirmadas do mesmo criador
+      const creatorId = (slotRow as any).availability.creator_id;
+      const { data: existingCalls } = await supabaseAdmin
+        .from("one_on_one_calls")
+        .select("scheduled_start_time, scheduled_duration_minutes")
+        .eq("creator_id", creatorId)
+        .eq("status", "confirmed")
+        .gte("scheduled_start_time", dayStart)
+        .lte("scheduled_start_time", dayEnd);
+
+      if (existingCalls && existingCalls.length > 0) {
+        for (const call of existingCalls) {
+          const existingStart = new Date(call.scheduled_start_time).getTime();
+          const existingEnd =
+            existingStart + (call.scheduled_duration_minutes ?? 30) * 60 * 1000;
+
+          if (callStart < existingEnd && callEnd > existingStart) {
+            throw new Error(
+              "Este horário já está reservado para outra videochamada.",
+            );
+          }
+        }
+      }
+    }
+
     // 3) STRIPE ACCOUNT DO CRIADOR (conectada)
     const { data: payoutInfo, error: payoutError } = await supabaseAdmin
       .from("creator_payout_info")
@@ -176,13 +264,8 @@ serve(async (req) => {
       // Fallback: URLs originais do FlutterFlow
       switch (product_type) {
         case "live":
-          success_url =
-            "https://live-canvas-vue.lovable.app/live?room=" +
-            product_id +
-            "&mode=viewer&userName=" +
-            (payload as any).user_metadata?.display_name +
-            "&userID=" +
-            payload.sub;
+        case "live_ticket":
+          success_url = "https://njob-client-web.vercel.app/lives/" + product_id;
           break;
         case "video-call":
         case "pack":

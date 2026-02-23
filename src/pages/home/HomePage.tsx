@@ -5,6 +5,7 @@ import Logo from '@/components/ui/Logo'
 import { supabase } from '@/lib/supabase'
 import type { Creator } from '@/types'
 import CardCreator, { CardCreatorSkeleton } from '@/components/cards/CardCreator'
+import { useTranslation } from 'react-i18next'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -24,45 +25,56 @@ interface CreatorFromRPC {
 
 type FilterKey = 'todos' | 'online' | 'lives' | 'conteudo' | 'presencial' | 'mulheres' | 'homens'
 
-const FILTERS: { key: FilterKey; label: string }[] = [
-  { key: 'todos', label: 'Todos' },
-  { key: 'online', label: 'Online' },
-  { key: 'lives', label: 'Lives' },
-  { key: 'conteudo', label: 'Conteúdo' },
-  { key: 'presencial', label: 'Presencial' },
-  { key: 'mulheres', label: 'Mulheres' },
-  { key: 'homens', label: 'Homens' },
-]
-
 // ─── Fetch ────────────────────────────────────────────────────────────────────
 
 async function fetchCreators(): Promise<Creator[]> {
-  const { data, error } = await supabase.rpc('get_creators_status')
-  if (error) throw error
+  // Buscar RPC e is_active em paralelo
+  const [rpcRes, profilesRes] = await Promise.all([
+    supabase.rpc('get_creators_status'),
+    supabase.from('profiles').select('id, is_active').eq('role', 'creator'),
+  ])
 
-  return (data ?? []).map((row: CreatorFromRPC): Creator => ({
-    id: row.id,
-    nome: row.nome,
-    status: row.status,
-    foto_perfil: row.foto_perfil,
-    data_criacao: row.data_criacao,
-    live_hoje: false,
-    live_horario: null,
-    vende_conteudo: row.vende_conteudo,
-    quantidade_likes: row.quantidade_likes,
-    faz_encontro_presencial: row.faz_encontro_presencial,
-    valor_1_hora: 0,
-    valor_30_min: 0,
-    faz_chamada_video: false,
-    genero: row.genero,
-    descricao: null,
-    imagens: [],
-    documents: [],
-    proxima_live: null,
-    curtiu: false,
-    notificacoes: null,
-    favorito: false,
-  }))
+  if (rpcRes.error) throw rpcRes.error
+  const rows = rpcRes.data ?? []
+
+  const activeMap = new Map<string, boolean>()
+  for (const p of profilesRes.data ?? []) {
+    activeMap.set(p.id, p.is_active ?? false)
+  }
+
+  return rows.map((row: CreatorFromRPC): Creator => {
+    // Se a RPC diz "em live", manter; senão usar is_active do profiles
+    const isActive = activeMap.get(row.id) ?? false
+    const status = row.status === 'em live'
+      ? 'em live'
+      : isActive
+        ? 'online'
+        : 'offline'
+
+    return {
+      id: row.id,
+      nome: row.nome,
+      status,
+      foto_perfil: row.foto_perfil,
+      data_criacao: row.data_criacao,
+      live_hoje: false,
+      live_horario: null,
+      vende_conteudo: row.vende_conteudo,
+      quantidade_likes: row.quantidade_likes,
+      faz_encontro_presencial: row.faz_encontro_presencial,
+      valor_1_hora: 0,
+      valor_30_min: 0,
+      faz_chamada_video: false,
+      genero: row.genero,
+      descricao: null,
+      imagens: [],
+      documents: [],
+      proxima_live: null,
+      curtiu: false,
+      notificacoes: null,
+      favorito: false,
+    }
+  })
 }
 
 // ─── Skeleton grid ────────────────────────────────────────────────────────────
@@ -80,6 +92,7 @@ function SkeletonGrid() {
 // ─── Empty state ──────────────────────────────────────────────────────────────
 
 function EmptyState({ query }: { query: string }) {
+  const { t } = useTranslation()
   return (
     <div className="flex flex-col items-center justify-center gap-4 px-8 py-16 text-center">
       <div className="w-16 h-16 rounded-full bg-[hsl(var(--secondary))] flex items-center justify-center">
@@ -87,10 +100,10 @@ function EmptyState({ query }: { query: string }) {
       </div>
       <div>
         <p className="text-sm font-medium text-[hsl(var(--foreground))]">
-          {query ? `Nenhum resultado para "${query}"` : 'Nenhum creator encontrado'}
+          {query ? t('home.noResults', { query }) : t('home.noCreators')}
         </p>
         <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-          {query ? 'Tente buscar por outro nome.' : 'Volte mais tarde para ver novos perfis.'}
+          {query ? t('home.tryOtherSearch') : t('home.comeBackLater')}
         </p>
       </div>
     </div>
@@ -112,11 +125,11 @@ function FilterPill({
     <button
       onClick={onClick}
       className={`
-        shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors duration-150
+        shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-150
         ${
           active
-            ? 'bg-[hsl(var(--primary))] text-white'
-            : 'bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]'
+            ? 'bg-[hsl(var(--primary))] text-white shadow-[0_0_12px_hsl(var(--primary)/0.3)]'
+            : 'bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))] border border-[hsl(var(--border))] hover:text-[hsl(var(--foreground))] hover:border-[hsl(var(--primary)/0.3)]'
         }
       `}
     >
@@ -141,17 +154,26 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function HomePage() {
+  const { t } = useTranslation()
   const [search, setSearch] = useState('')
   const deferredSearch = useDeferredValue(search)
   const [activeFilter, setActiveFilter] = useState<FilterKey>('todos')
 
+  const FILTERS: { key: FilterKey; label: string }[] = [
+    { key: 'todos', label: t('home.filterAll') },
+    { key: 'online', label: t('home.filterOnline') },
+    { key: 'lives', label: t('home.filterLives') },
+    { key: 'conteudo', label: t('home.filterContent') },
+    { key: 'presencial', label: t('home.filterInPerson') },
+    { key: 'mulheres', label: t('home.filterWomen') },
+    { key: 'homens', label: t('home.filterMen') },
+  ]
+
   const { data: creators, isLoading, isError } = useQuery({
     queryKey: ['creators'],
     queryFn: fetchCreators,
-    staleTime: 1000 * 60 * 2, // 2 min
+    staleTime: 1000 * 60 * 2,
   })
-
-  // ── Seções de creators ───────────────────────────────────────────────────
 
   const sections = useMemo(() => {
     if (!creators) return { popular: [], novos: [], online: [], emLive: [] }
@@ -164,20 +186,16 @@ export default function HomePage() {
     }
   }, [creators])
 
-  // ── Filter + search ────────────────────────────────────────────────────────
-
   const filtered = useMemo(() => {
     if (!creators) return []
 
     let list = creators
 
-    // Text search (debounced via useDeferredValue)
     const q = deferredSearch.trim().toLowerCase()
     if (q) {
       list = list.filter((c) => c.nome.toLowerCase().includes(q))
     }
 
-    // Category filter
     switch (activeFilter) {
       case 'online':
         list = list.filter((c) => c.status === 'online')
@@ -204,8 +222,6 @@ export default function HomePage() {
 
   const hasActiveFilterOrSearch = activeFilter !== 'todos' || deferredSearch.trim() !== ''
 
-  // ─────────────────────────────────────────────────────────────────────────
-
   return (
     <div className="flex flex-col min-h-full bg-[hsl(var(--background))]">
 
@@ -226,16 +242,17 @@ export default function HomePage() {
           />
           <input
             type="search"
-            placeholder="Buscar creators..."
+            placeholder={t('home.searchPlaceholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="
               w-full h-10 pl-9 pr-4 rounded-full text-sm
-              bg-[hsl(var(--secondary))] text-[hsl(var(--foreground))]
+              bg-[hsl(var(--card))] text-[hsl(var(--foreground))]
               placeholder:text-[hsl(var(--muted-foreground))]
               border border-[hsl(var(--border))]
-              focus:outline-none focus:border-[hsl(var(--primary))]
-              transition-colors duration-150
+              focus:outline-none focus:border-[hsl(var(--primary)/0.5)]
+              focus:shadow-[0_0_0_1px_hsl(var(--primary)/0.2)]
+              transition-all duration-150
             "
           />
         </div>
@@ -266,7 +283,7 @@ export default function HomePage() {
         {isError && !isLoading && (
           <div className="flex items-center justify-center py-16 px-8 text-center">
             <p className="text-sm text-[hsl(var(--muted-foreground))]">
-              Erro ao carregar creators. Tente novamente mais tarde.
+              {t('home.loadError')}
             </p>
           </div>
         )}
@@ -275,7 +292,6 @@ export default function HomePage() {
         {!isLoading && !isError && (
           <>
             {hasActiveFilterOrSearch ? (
-              /* Modo filtrado — grid plano */
               filtered.length === 0 ? (
                 <EmptyState query={search} />
               ) : (
@@ -286,38 +302,33 @@ export default function HomePage() {
                 </div>
               )
             ) : (
-              /* Modo padrão — seções */
               <div className="flex flex-col gap-6 py-4">
-                {/* Em Live */}
                 {sections.emLive.length > 0 && (
-                  <Section title="Ao vivo agora">
+                  <Section title={t('home.sectionLive')}>
                     {sections.emLive.map((c) => (
                       <CardCreator key={c.id} creator={c} />
                     ))}
                   </Section>
                 )}
 
-                {/* Online */}
                 {sections.online.length > 0 && (
-                  <Section title="Online agora">
+                  <Section title={t('home.sectionOnline')}>
                     {sections.online.map((c) => (
                       <CardCreator key={c.id} creator={c} />
                     ))}
                   </Section>
                 )}
 
-                {/* Mais populares */}
                 {sections.popular.length > 0 && (
-                  <Section title="Mais populares">
+                  <Section title={t('home.sectionPopular')}>
                     {sections.popular.map((c) => (
                       <CardCreator key={c.id} creator={c} />
                     ))}
                   </Section>
                 )}
 
-                {/* Novos */}
                 {sections.novos.length > 0 && (
-                  <Section title="Novos na plataforma">
+                  <Section title={t('home.sectionNew')}>
                     {sections.novos.map((c) => (
                       <CardCreator key={c.id} creator={c} />
                     ))}

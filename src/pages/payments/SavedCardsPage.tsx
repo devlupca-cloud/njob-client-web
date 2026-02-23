@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { ArrowLeft, Plus, CreditCard, Trash2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
@@ -57,6 +58,7 @@ function CardItem({
   onClick: () => void
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const { t } = useTranslation()
 
   function handleDelete(e: React.MouseEvent) {
     e.stopPropagation()
@@ -90,7 +92,7 @@ function CardItem({
           </span>
           {card.is_default && (
             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[hsl(var(--primary)/0.15)] text-[hsl(var(--primary))]">
-              PADRÃO
+              {t('payments.savedCards.default')}
             </span>
           )}
         </div>
@@ -107,8 +109,8 @@ function CardItem({
             ? 'bg-red-500/20 text-red-400'
             : 'bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))] hover:text-red-400'
         }`}
-        aria-label="Remover cartão"
-        title={confirmDelete ? 'Clique novamente para confirmar' : 'Remover cartão'}
+        aria-label={t('payments.savedCards.removeCard')}
+        title={confirmDelete ? t('payments.savedCards.confirmRemove') : t('payments.savedCards.removeCard')}
       >
         <Trash2 size={14} />
       </button>
@@ -119,15 +121,17 @@ function CardItem({
 // ─── Empty State ──────────────────────────────────────────────────────────────
 
 function EmptyState({ onAdd }: { onAdd: () => void }) {
+  const { t } = useTranslation()
+
   return (
     <div className="flex flex-col items-center justify-center gap-4 py-20 text-center">
       <div className="w-16 h-16 rounded-full bg-[hsl(var(--secondary))] flex items-center justify-center">
         <CreditCard size={28} className="text-[hsl(var(--muted-foreground))]" />
       </div>
       <div>
-        <p className="text-sm font-medium text-[hsl(var(--foreground))]">Nenhum cartão cadastrado</p>
+        <p className="text-sm font-medium text-[hsl(var(--foreground))]">{t('payments.savedCards.empty')}</p>
         <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-          Adicione um cartão para facilitar seus pagamentos.
+          {t('payments.savedCards.emptyHint')}
         </p>
       </div>
       <button
@@ -135,7 +139,7 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
         className="flex items-center gap-2 px-5 py-2.5 bg-[hsl(var(--primary))] text-white rounded-xl text-sm font-semibold"
       >
         <Plus size={16} />
-        Adicionar cartão
+        {t('payments.savedCards.addCard')}
       </button>
     </div>
   )
@@ -145,6 +149,7 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
 
 export default function SavedCardsPage() {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const user = useAuthStore((s) => s.user)
   const queryClient = useQueryClient()
 
@@ -153,6 +158,7 @@ export default function SavedCardsPage() {
     queryFn: () => fetchSavedCards(user!.id),
     enabled: !!user?.id,
     staleTime: 1000 * 60 * 2,
+    retry: false,
   })
 
   const deleteMutation = useMutation({
@@ -171,17 +177,17 @@ export default function SavedCardsPage() {
           <button
             onClick={() => navigate(-1)}
             className="absolute left-0 w-7 h-7 flex items-center justify-center rounded-full bg-[hsl(var(--secondary))] text-[hsl(var(--foreground))]"
-            aria-label="Voltar"
+            aria-label={t('common.back')}
           >
             <ArrowLeft size={16} />
           </button>
           <span className="text-base font-semibold text-[hsl(var(--foreground))]">
-            Cartões de Pagamento
+            {t('payments.savedCards.title')}
           </span>
           <button
             onClick={() => navigate('/payments/cards/new')}
             className="absolute right-0 w-7 h-7 flex items-center justify-center rounded-full bg-[hsl(var(--primary))] text-white"
-            aria-label="Adicionar cartão"
+            aria-label={t('payments.savedCards.addCard')}
           >
             <Plus size={16} />
           </button>
@@ -199,7 +205,7 @@ export default function SavedCardsPage() {
       {isError && (
         <div className="flex-1 flex items-center justify-center px-8">
           <p className="text-sm text-[hsl(var(--muted-foreground))] text-center">
-            Erro ao carregar cartões. Tente novamente.
+            {t('payments.savedCards.loadError')}
           </p>
         </div>
       )}
@@ -213,7 +219,7 @@ export default function SavedCardsPage() {
             <div className="flex flex-col gap-3">
               {deleteMutation.isError && (
                 <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3">
-                  <p className="text-xs text-red-400">Erro ao remover cartão. Tente novamente.</p>
+                  <p className="text-xs text-red-400">{t('payments.savedCards.removeError')}</p>
                 </div>
               )}
 
@@ -231,7 +237,7 @@ export default function SavedCardsPage() {
                 className="flex items-center justify-center gap-2 w-full py-3 border border-dashed border-[hsl(var(--border))] rounded-xl text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))] hover:border-[hsl(var(--primary)/0.5)] transition-colors mt-2"
               >
                 <Plus size={16} />
-                Adicionar novo cartão
+                {t('payments.savedCards.addNew')}
               </button>
             </div>
           )}

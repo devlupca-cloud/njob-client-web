@@ -388,6 +388,24 @@ async function handlePaymentCheckoutCompleted(session: any, connectedAccountId?:
 
     const scheduledStartTime = `${availabilityDate}T${slotTime}`;
 
+    // 1) Marcar slot como comprado ATOMICAMENTE (previne race condition)
+    const { data: updatedSlots, error: slotUpdateErr } = await supabaseAdmin
+      .from("creator_availability_slots")
+      .update({ purchased: true })
+      .eq("id", slotId)
+      .eq("purchased", false)
+      .select("id");
+
+    if (slotUpdateErr) {
+      throw new Error(`Erro ao reservar slot: ${slotUpdateErr.message}`);
+    }
+
+    if (!updatedSlots || updatedSlots.length === 0) {
+      console.warn(`Slot ${slotId} já foi comprado por outro cliente. Ignorando duplicata.`);
+      return;
+    }
+
+    // 2) Criar registro da chamada (slot já reservado)
     const { error: callErr } = await supabaseAdmin
       .from("one_on_one_calls")
       .insert({
@@ -404,15 +422,13 @@ async function handlePaymentCheckoutCompleted(session: any, connectedAccountId?:
         creator_share: creatorShare,
       });
 
-    const { error: callErr2 } = await supabaseAdmin
-      .from("creator_availability_slots")
-      .update({ purchased: true })
-      .eq("id", slotId);
-
-    if (callErr || callErr2) {
-      throw new Error(
-        `Erro ao criar registro de video-call: ${(callErr || callErr2)?.message}`,
-      );
+    if (callErr) {
+      // Rollback: desfaz a reserva do slot
+      await supabaseAdmin
+        .from("creator_availability_slots")
+        .update({ purchased: false })
+        .eq("id", slotId);
+      throw new Error(`Erro ao criar registro de video-call: ${callErr.message}`);
     }
   }
 }

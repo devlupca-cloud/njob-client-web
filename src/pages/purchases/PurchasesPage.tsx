@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import {
   ArrowLeft,
   Package,
@@ -11,6 +12,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
+import { formatCurrency, formatDate } from '@/lib/utils'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -70,55 +72,48 @@ interface PurchasesData {
 
 async function fetchPurchases(userId: string): Promise<PurchasesData> {
   const [packsRes, livesRes, callsRes] = await Promise.all([
-    supabase
-      .from('pack_purchases')
-      .select('*, packs(id, title, cover_image_url, price, profile_id)')
-      .eq('user_id', userId)
-      .order('purchased_at', { ascending: false }),
+    Promise.resolve(
+      supabase
+        .from('pack_purchases')
+        .select('*, packs(id, title, cover_image_url, price, profile_id)')
+        .eq('user_id', userId)
+        .order('purchased_at', { ascending: false })
+        .limit(50)
+    )
+      .then((r) => r.data as PackPurchase[] | null)
+      .catch(() => null),
 
-    supabase
-      .from('live_stream_tickets')
-      .select('*, live_streams(id, title, cover_image_url, scheduled_start_time, ticket_price, status)')
-      .eq('user_id', userId)
-      .order('purchased_at', { ascending: false }),
+    Promise.resolve(
+      supabase
+        .from('live_stream_tickets')
+        .select('*, live_streams(id, title, cover_image_url, scheduled_start_time, ticket_price, status)')
+        .eq('user_id', userId)
+        .order('purchased_at', { ascending: false })
+        .limit(50)
+    )
+      .then((r) => r.data as LiveTicket[] | null)
+      .catch(() => null),
 
-    supabase
-      .from('one_on_one_calls')
-      .select('*, profiles!creator_id(id, full_name, avatar_url)')
-      .eq('user_id', userId)
-      .order('scheduled_start_time', { ascending: false }),
+    Promise.resolve(
+      supabase
+        .from('one_on_one_calls')
+        .select('*, profiles!creator_id(id, full_name, avatar_url)')
+        .eq('user_id', userId)
+        .order('scheduled_start_time', { ascending: false })
+        .limit(50)
+    )
+      .then((r) => r.data as CallPurchase[] | null)
+      .catch(() => null),
   ])
 
   return {
-    packs: (packsRes.data ?? []) as PackPurchase[],
-    lives: (livesRes.data ?? []) as LiveTicket[],
-    calls: (callsRes.data ?? []) as CallPurchase[],
+    packs: packsRes ?? [],
+    lives: livesRes ?? [],
+    calls: callsRes ?? [],
   }
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function formatCurrency(value: number): string {
-  return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-}
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  })
-}
-
-function callStatusLabel(status: CallPurchase['status']): string {
-  const map: Record<CallPurchase['status'], string> = {
-    pending: 'Pendente',
-    confirmed: 'Confirmada',
-    completed: 'Realizada',
-    cancelled: 'Cancelada',
-  }
-  return map[status]
-}
 
 function callStatusClass(status: CallPurchase['status']): string {
   switch (status) {
@@ -143,19 +138,14 @@ function liveStatusClass(status: string): string {
 
 type Tab = 'packs' | 'lives' | 'calls'
 
-const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
-  { key: 'packs', label: 'Pacotes', icon: <Package size={14} /> },
-  { key: 'lives', label: 'Lives', icon: <Radio size={14} /> },
-  { key: 'calls', label: 'Chamadas', icon: <PhoneCall size={14} /> },
-]
-
 // ─── Empty State ──────────────────────────────────────────────────────────────
 
 function EmptyState({ tab }: { tab: Tab }) {
+  const { t } = useTranslation()
   const messages = {
-    packs: 'Você ainda não comprou nenhum pacote.',
-    lives: 'Você ainda não comprou ingresso para nenhuma live.',
-    calls: 'Você ainda não agendou nenhuma chamada.',
+    packs: t('purchases.emptyPacks'),
+    lives: t('purchases.emptyLives'),
+    calls: t('purchases.emptyCalls'),
   }
   return (
     <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
@@ -167,7 +157,8 @@ function EmptyState({ tab }: { tab: Tab }) {
 
 // ─── Pack List ────────────────────────────────────────────────────────────────
 
-function PackList({ packs }: { packs: PackPurchase[] }) {
+function PackList({ packs, onTap }: { packs: PackPurchase[]; onTap: (creatorId: string) => void }) {
+  const { t } = useTranslation()
   if (packs.length === 0) return <EmptyState tab="packs" />
 
   return (
@@ -175,9 +166,11 @@ function PackList({ packs }: { packs: PackPurchase[] }) {
       {packs.map((purchase) => {
         const pack = purchase.packs
         return (
-          <div
+          <button
             key={purchase.id}
-            className="flex items-center gap-3 bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl p-3"
+            onClick={() => pack?.profile_id && onTap(pack.profile_id)}
+            disabled={!pack?.profile_id}
+            className="flex items-center gap-3 bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl p-3 text-left w-full disabled:opacity-70"
           >
             {/* Thumbnail */}
             <div className="w-14 h-14 rounded-lg overflow-hidden bg-[hsl(var(--secondary))] shrink-0 flex items-center justify-center">
@@ -195,7 +188,7 @@ function PackList({ packs }: { packs: PackPurchase[] }) {
             {/* Info */}
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-[hsl(var(--foreground))] truncate">
-                {pack?.title ?? 'Pack removido'}
+                {pack?.title ?? t('purchases.packRemoved')}
               </p>
               <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
                 {purchase.purchased_at ? formatDate(purchase.purchased_at) : '—'}
@@ -208,7 +201,7 @@ function PackList({ packs }: { packs: PackPurchase[] }) {
                 {formatCurrency(purchase.purchase_price)}
               </p>
             </div>
-          </div>
+          </button>
         )
       })}
     </div>
@@ -217,17 +210,21 @@ function PackList({ packs }: { packs: PackPurchase[] }) {
 
 // ─── Live List ────────────────────────────────────────────────────────────────
 
-function LiveList({ lives }: { lives: LiveTicket[] }) {
+function LiveList({ lives, onTap }: { lives: LiveTicket[]; onTap: (liveId: string) => void }) {
+  const { t } = useTranslation()
   if (lives.length === 0) return <EmptyState tab="lives" />
 
   return (
     <div className="flex flex-col gap-3">
       {lives.map((ticket) => {
         const live = ticket.live_streams
+        const canEnter = live?.status === 'live' || live?.status === 'scheduled'
         return (
-          <div
+          <button
             key={ticket.id}
-            className="flex items-center gap-3 bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl p-3"
+            onClick={() => live && canEnter && onTap(live.id)}
+            disabled={!canEnter}
+            className="flex items-center gap-3 bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl p-3 text-left w-full disabled:opacity-70"
           >
             {/* Thumbnail */}
             <div className="w-14 h-14 rounded-lg overflow-hidden bg-[hsl(var(--secondary))] shrink-0 flex items-center justify-center">
@@ -245,7 +242,7 @@ function LiveList({ lives }: { lives: LiveTicket[] }) {
             {/* Info */}
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-[hsl(var(--foreground))] truncate">
-                {live?.title ?? 'Live removida'}
+                {live?.title ?? t('purchases.liveRemoved')}
               </p>
               <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
                 {live?.scheduled_start_time ? formatDate(live.scheduled_start_time) : '—'}
@@ -254,7 +251,7 @@ function LiveList({ lives }: { lives: LiveTicket[] }) {
                 <span
                   className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded-full mt-1 ${liveStatusClass(live.status)}`}
                 >
-                  {live.status === 'live' ? 'Ao vivo' : live.status === 'scheduled' ? 'Agendada' : 'Encerrada'}
+                  {live.status === 'live' ? t('purchases.liveStatuses.live') : live.status === 'scheduled' ? t('purchases.liveStatuses.scheduled') : t('purchases.liveStatuses.ended')}
                 </span>
               )}
             </div>
@@ -262,10 +259,10 @@ function LiveList({ lives }: { lives: LiveTicket[] }) {
             {/* Valor */}
             <div className="text-right shrink-0">
               <p className="text-sm font-bold text-[hsl(var(--primary))]">
-                {ticket.purchase_price ? formatCurrency(ticket.purchase_price) : 'Grátis'}
+                {ticket.purchase_price ? formatCurrency(ticket.purchase_price) : t('purchases.freeTag')}
               </p>
             </div>
-          </div>
+          </button>
         )
       })}
     </div>
@@ -274,17 +271,32 @@ function LiveList({ lives }: { lives: LiveTicket[] }) {
 
 // ─── Call List ────────────────────────────────────────────────────────────────
 
-function CallList({ calls }: { calls: CallPurchase[] }) {
+function CallList({ calls, onTap }: { calls: CallPurchase[]; onTap: (callId: string) => void }) {
+  const { t } = useTranslation()
+
+  function callStatusLabel(status: CallPurchase['status']): string {
+    const map: Record<CallPurchase['status'], string> = {
+      pending: t('purchases.statuses.pending'),
+      confirmed: t('purchases.statuses.confirmed'),
+      completed: t('purchases.statuses.done'),
+      cancelled: t('purchases.statuses.canceled'),
+    }
+    return map[status]
+  }
+
   if (calls.length === 0) return <EmptyState tab="calls" />
 
   return (
     <div className="flex flex-col gap-3">
       {calls.map((call) => {
         const creator = call.profiles
+        const canEnter = call.status === 'pending' || call.status === 'confirmed'
         return (
-          <div
+          <button
             key={call.id}
-            className="flex items-center gap-3 bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl p-3"
+            onClick={() => canEnter && onTap(call.id)}
+            disabled={!canEnter}
+            className="flex items-center gap-3 bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl p-3 text-left w-full disabled:opacity-70"
           >
             {/* Avatar */}
             <div className="w-14 h-14 rounded-full overflow-hidden bg-[hsl(var(--secondary))] shrink-0 flex items-center justify-center">
@@ -320,7 +332,7 @@ function CallList({ calls }: { calls: CallPurchase[] }) {
                 {formatCurrency(call.call_price)}
               </p>
             </div>
-          </div>
+          </button>
         )
       })}
     </div>
@@ -331,8 +343,15 @@ function CallList({ calls }: { calls: CallPurchase[] }) {
 
 export default function PurchasesPage() {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const user = useAuthStore((s) => s.user)
   const [activeTab, setActiveTab] = useState<Tab>('packs')
+
+  const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
+    { key: 'packs', label: t('purchases.tabs.packs'), icon: <Package size={14} /> },
+    { key: 'lives', label: t('purchases.tabs.lives'), icon: <Radio size={14} /> },
+    { key: 'calls', label: t('purchases.tabs.calls'), icon: <PhoneCall size={14} /> },
+  ]
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['purchases', user?.id],
@@ -357,11 +376,11 @@ export default function PurchasesPage() {
           <button
             onClick={() => navigate(-1)}
             className="absolute left-0 w-7 h-7 flex items-center justify-center rounded-full bg-[hsl(var(--secondary))] text-[hsl(var(--foreground))]"
-            aria-label="Voltar"
+            aria-label={t('common.back')}
           >
             <ArrowLeft size={16} />
           </button>
-          <span className="text-base font-semibold text-[hsl(var(--foreground))]">Compras</span>
+          <span className="text-base font-semibold text-[hsl(var(--foreground))]">{t('purchases.title')}</span>
         </div>
 
         {/* Tabs */}
@@ -406,17 +425,17 @@ export default function PurchasesPage() {
       {isError && (
         <div className="flex-1 flex items-center justify-center px-8">
           <p className="text-sm text-[hsl(var(--muted-foreground))] text-center">
-            Erro ao carregar compras. Tente novamente.
+            {t('purchases.loadError')}
           </p>
         </div>
       )}
 
       {/* Content */}
-      {!isLoading && !isError && data && (
+      {!isLoading && !isError && (
         <main className="flex-1 px-4 py-4 max-w-3xl mx-auto w-full">
-          {activeTab === 'packs' && <PackList packs={data.packs} />}
-          {activeTab === 'lives' && <LiveList lives={data.lives} />}
-          {activeTab === 'calls' && <CallList calls={data.calls} />}
+          {activeTab === 'packs' && <PackList packs={data?.packs ?? []} onTap={(creatorId) => navigate(`/creator/${creatorId}/content`)} />}
+          {activeTab === 'lives' && <LiveList lives={data?.lives ?? []} onTap={(liveId) => navigate(`/lives/${liveId}`)} />}
+          {activeTab === 'calls' && <CallList calls={data?.calls ?? []} onTap={(callId) => navigate(`/calls/${callId}`)} />}
         </main>
       )}
     </div>

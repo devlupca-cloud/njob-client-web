@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import {
   ArrowLeft,
   TrendingUp,
@@ -12,6 +13,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
+import { formatCurrency, formatDate } from '@/lib/utils'
 import type { Transaction } from '@/types'
 
 // ─── Fetch ────────────────────────────────────────────────────────────────────
@@ -19,25 +21,18 @@ import type { Transaction } from '@/types'
 async function fetchTransactions(userId: string): Promise<Transaction[]> {
   const { data, error } = await supabase
     .from('transactions')
-    .select('*')
+    .select('id, amount, currency, status, created_at, gateway')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
+    .limit(100)
 
   if (error) throw error
-  return (data ?? []) as Transaction[]
+  return (data ?? []) as unknown as Transaction[]
 }
 
 // ─── Period Filter ────────────────────────────────────────────────────────────
 
 type Period = '1m' | '3m' | '6m' | '1y' | 'all'
-
-const PERIODS: { key: Period; label: string }[] = [
-  { key: '1m', label: 'Este mês' },
-  { key: '3m', label: '3 meses' },
-  { key: '6m', label: '6 meses' },
-  { key: '1y', label: '1 ano' },
-  { key: 'all', label: 'Tudo' },
-]
 
 function getPeriodStart(period: Period): Date | null {
   const now = new Date()
@@ -66,41 +61,8 @@ function getPeriodStart(period: Period): Date | null {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function formatCurrency(value: number): string {
-  return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-}
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  })
-}
-
 function isDebit(type: Transaction['type']): boolean {
   return type === 'purchase' || type === 'subscription' || type === 'call' || type === 'live'
-}
-
-function typeLabel(type: Transaction['type']): string {
-  const map: Record<Transaction['type'], string> = {
-    purchase: 'Compra de pack',
-    subscription: 'Assinatura',
-    call: 'Chamada de vídeo',
-    live: 'Ingresso de live',
-    refund: 'Reembolso',
-  }
-  return map[type] ?? type
-}
-
-function statusLabel(status: Transaction['status']): string {
-  const map: Record<Transaction['status'], string> = {
-    pending: 'Pendente',
-    completed: 'Concluído',
-    failed: 'Falhou',
-    refunded: 'Reembolsado',
-  }
-  return map[status] ?? status
 }
 
 function statusClass(status: Transaction['status']): string {
@@ -139,7 +101,7 @@ function SummaryCard({
 
 // ─── Transaction Item ─────────────────────────────────────────────────────────
 
-function TransactionItem({ tx }: { tx: Transaction }) {
+function TransactionItem({ tx, typeLabel, statusLabel }: { tx: Transaction; typeLabel: (type: Transaction['type']) => string; statusLabel: (status: Transaction['status']) => string }) {
   const debit = isDebit(tx.type)
 
   return (
@@ -185,9 +147,39 @@ function TransactionItem({ tx }: { tx: Transaction }) {
 
 export default function FinancialPage() {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const user = useAuthStore((s) => s.user)
   const [period, setPeriod] = useState<Period>('1m')
   const [periodOpen, setPeriodOpen] = useState(false)
+
+  const PERIODS: { key: Period; label: string }[] = [
+    { key: '1m', label: t('financial.periods.thisMonth') },
+    { key: '3m', label: t('financial.periods.3months') },
+    { key: '6m', label: t('financial.periods.6months') },
+    { key: '1y', label: t('financial.periods.1year') },
+    { key: 'all', label: t('financial.periods.all') },
+  ]
+
+  function typeLabel(type: Transaction['type']): string {
+    const map: Record<Transaction['type'], string> = {
+      purchase: t('financial.types.packPurchase'),
+      subscription: t('financial.types.subscription'),
+      call: t('financial.types.videoCall'),
+      live: t('financial.types.liveTicket'),
+      refund: t('financial.types.refund'),
+    }
+    return map[type] ?? type
+  }
+
+  function statusLabel(status: Transaction['status']): string {
+    const map: Record<Transaction['status'], string> = {
+      pending: t('financial.statuses.pending'),
+      completed: t('financial.statuses.completed'),
+      failed: t('financial.statuses.failed'),
+      refunded: t('financial.statuses.refunded'),
+    }
+    return map[status] ?? status
+  }
 
   const { data: transactions, isLoading, isError } = useQuery({
     queryKey: ['transactions', user?.id],
@@ -217,7 +209,7 @@ export default function FinancialPage() {
     return { saldo, entradas, saidas }
   }, [filtered])
 
-  const currentPeriodLabel = PERIODS.find((p) => p.key === period)?.label ?? 'Este mês'
+  const currentPeriodLabel = PERIODS.find((p) => p.key === period)?.label ?? t('financial.periods.thisMonth')
 
   return (
     <div className="flex flex-col min-h-full bg-[hsl(var(--background))]">
@@ -228,11 +220,11 @@ export default function FinancialPage() {
           <button
             onClick={() => navigate(-1)}
             className="absolute left-0 w-7 h-7 flex items-center justify-center rounded-full bg-[hsl(var(--secondary))] text-[hsl(var(--foreground))]"
-            aria-label="Voltar"
+            aria-label={t('common.back')}
           >
             <ArrowLeft size={16} />
           </button>
-          <span className="text-base font-semibold text-[hsl(var(--foreground))]">Financeiro</span>
+          <span className="text-base font-semibold text-[hsl(var(--foreground))]">{t('financial.title')}</span>
         </div>
       </header>
 
@@ -247,7 +239,7 @@ export default function FinancialPage() {
       {isError && (
         <div className="flex-1 flex items-center justify-center px-8">
           <p className="text-sm text-[hsl(var(--muted-foreground))] text-center">
-            Erro ao carregar transações. Tente novamente.
+            {t('financial.loadError')}
           </p>
         </div>
       )}
@@ -294,19 +286,19 @@ export default function FinancialPage() {
           {/* Cards de resumo */}
           <div className="flex gap-2">
             <SummaryCard
-              label="Saldo"
+              label={t('financial.balance')}
               value={formatCurrency(summary.saldo)}
               icon={<Wallet size={15} className="text-[hsl(var(--primary))]" />}
               colorClass="bg-[hsl(var(--primary)/0.15)]"
             />
             <SummaryCard
-              label="Entradas"
+              label={t('financial.income')}
               value={formatCurrency(summary.entradas)}
               icon={<TrendingUp size={15} className="text-green-400" />}
               colorClass="bg-green-500/10"
             />
             <SummaryCard
-              label="Saídas"
+              label={t('financial.expenses')}
               value={formatCurrency(summary.saidas)}
               icon={<TrendingDown size={15} className="text-red-400" />}
               colorClass="bg-red-500/10"
@@ -316,9 +308,9 @@ export default function FinancialPage() {
           {/* Lista de transações */}
           <div className="flex flex-col">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-semibold text-[hsl(var(--foreground))]">Transações</h2>
+              <h2 className="text-sm font-semibold text-[hsl(var(--foreground))]">{t('financial.transactions')}</h2>
               <span className="text-xs text-[hsl(var(--muted-foreground))]">
-                {filtered.length} registro{filtered.length !== 1 ? 's' : ''}
+                {filtered.length} {filtered.length !== 1 ? t('common.records') : t('common.record')}
               </span>
             </div>
 
@@ -326,13 +318,13 @@ export default function FinancialPage() {
               <div className="py-16 text-center">
                 <Wallet size={32} className="mx-auto text-[hsl(var(--muted-foreground))] mb-3 opacity-50" />
                 <p className="text-sm text-[hsl(var(--muted-foreground))]">
-                  Nenhuma transação no período selecionado.
+                  {t('financial.empty')}
                 </p>
               </div>
             ) : (
               <div className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-2xl px-4">
                 {filtered.map((tx) => (
-                  <TransactionItem key={tx.id} tx={tx} />
+                  <TransactionItem key={tx.id} tx={tx} typeLabel={typeLabel} statusLabel={statusLabel} />
                 ))}
               </div>
             )}

@@ -1,29 +1,39 @@
+import { useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
+/**
+ * TODO: Implementar fluxo de checkout completo.
+ * Esta pagina e um placeholder que redireciona o usuario
+ * enquanto o pagamento e processado via Stripe Checkout (redirect externo).
+ */
 export default function CheckoutPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const type = searchParams.get('type')
+  const status = searchParams.get('status')
+  const { t } = useTranslation()
+
+  useEffect(() => {
+    // Se retornou do Stripe com sucesso, redireciona para compras
+    if (status === 'success') {
+      const timer = setTimeout(() => navigate('/purchases', { replace: true }), 2000)
+      return () => clearTimeout(timer)
+    }
+    // Se cancelou, volta para a pagina anterior
+    if (status === 'cancel') {
+      navigate(-1)
+    }
+  }, [status, navigate])
 
   return (
     <div className="flex flex-col min-h-full bg-[hsl(var(--background))]">
-      <header className="sticky top-0 z-10 bg-[hsl(var(--background))] border-b border-[hsl(var(--border))] px-4 pt-4 pb-3">
-        <div className="relative flex items-center justify-center h-7">
-          <button
-            onClick={() => navigate(-1)}
-            className="absolute left-0 w-7 h-7 flex items-center justify-center rounded-full bg-[hsl(var(--secondary))] text-[hsl(var(--foreground))]"
-            aria-label="Voltar"
-          >
-            <ArrowLeft size={16} />
-          </button>
-          <span className="text-base font-semibold text-[hsl(var(--foreground))]">Checkout</span>
-        </div>
-      </header>
-
-      <main className="flex-1 flex items-center justify-center px-8">
+      <main className="flex-1 flex flex-col items-center justify-center px-8 gap-4">
+        <Loader2 className="w-8 h-8 animate-spin text-[hsl(var(--primary))]" />
         <p className="text-sm text-[hsl(var(--muted-foreground))] text-center">
-          Processando pagamento{type ? ` (${type})` : ''}...
+          {status === 'success'
+            ? t('checkout.success', 'Pagamento confirmado! Redirecionando...')
+            : t('checkout.processing', 'Processando pagamento...')}
         </p>
       </main>
     </div>

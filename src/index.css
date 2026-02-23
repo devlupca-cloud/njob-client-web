@@ -3,18 +3,19 @@
 /* ─── NJOb Design Tokens (FlutterFlow Dark Theme) ──────────────────────────── */
 @layer base {
   :root {
-    /* Primary palette — roxo lavanda */
-    --primary:   296 100% 74%;   /* #C980FF */
-    --secondary: 258  99% 72%;   /* #9D70FF */
-    --tertiary:  292  72% 56%;   /* #CC3CE4 */
+    /* Primary palette */
+    --primary:           296 100% 74%;   /* #C980FF — brand purple  */
+    --accent-secondary:  258  99% 72%;   /* #9D70FF — bright accent */
+    --tertiary:          292  72% 56%;   /* #CC3CE4 — magenta       */
 
-    /* Backgrounds */
-    --background:           0 0%  0%;    /* #000000 */
-    --secondary-background: 270 22%  8%; /* #141018 */
-    --card:                272 14% 11%;  /* #1D1921 */
-    --card-alt:              0  0% 20%;  /* #333333 */
-    --surface:               0  0% 16%;  /* #2A2A2A */
-    --alternate:           210 14% 18%;  /* #262D34 */
+    /* Backgrounds / Surfaces */
+    --background:           0  0%  0%;   /* #000000 — page bg       */
+    --secondary-background: 270 22%  8%; /* #141018 — navbar bg     */
+    --secondary:           270 10% 15%;  /* #252029 — surface/chips */
+    --card:                272 14% 11%;  /* #1D1921 — cards          */
+    --card-alt:              0  0% 20%;  /* #333333                  */
+    --surface:               0  0% 16%;  /* #2A2A2A                  */
+    --alternate:           210 14% 18%;  /* #262D34                  */
 
     /* Text */
     --foreground:         0  0% 100%;  /* #FFFFFF */

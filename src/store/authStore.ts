@@ -8,9 +8,11 @@ interface AuthState {
   user: User | null
   profile: Profile | null
   isLoading: boolean
+  isGuest: boolean
   setSession: (session: Session | null) => void
   setProfile: (profile: Profile | null) => void
   setLoading: (loading: boolean) => void
+  setGuest: (isGuest: boolean) => void
   clear: () => void
 }
 
@@ -21,15 +23,17 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       profile: null,
       isLoading: true,
+      isGuest: false,
       setSession: (session) =>
         set({ session, user: session?.user ?? null }),
       setProfile: (profile) => set({ profile }),
       setLoading: (isLoading) => set({ isLoading }),
-      clear: () => set({ session: null, user: null, profile: null }),
+      setGuest: (isGuest) => set({ isGuest }),
+      clear: () => set({ session: null, user: null, profile: null, isGuest: false }),
     }),
     {
       name: 'njob-auth',
-      partialize: (state) => ({ profile: state.profile }),
+      partialize: (state) => ({ profile: state.profile, isGuest: state.isGuest }),
     }
   )
 )

@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { ArrowLeft, Tag, Copy, Check, Ticket } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
+import { formatDate } from '@/lib/utils'
 import type { Coupon } from '@/types'
 
 // ─── Fetch ────────────────────────────────────────────────────────────────────
@@ -30,16 +32,11 @@ function formatDiscount(coupon: Coupon): string {
   return `R$ ${coupon.discount_value.toFixed(2).replace('.', ',')} OFF`
 }
 
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return '—'
-  const d = new Date(dateStr)
-  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
-}
-
 // ─── Coupon Card ─────────────────────────────────────────────────────────────
 
 function CouponCard({ coupon, onClick }: { coupon: Coupon; onClick: () => void }) {
   const [copied, setCopied] = useState(false)
+  const { t } = useTranslation()
   const active = isCouponActive(coupon)
 
   function handleCopy(e: React.MouseEvent) {
@@ -77,7 +74,7 @@ function CouponCard({ coupon, onClick }: { coupon: Coupon; onClick: () => void }
           <button
             onClick={handleCopy}
             className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))] transition-colors"
-            aria-label="Copiar código"
+            aria-label={t('coupons.copyCode')}
           >
             {copied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
           </button>
@@ -92,12 +89,12 @@ function CouponCard({ coupon, onClick }: { coupon: Coupon; onClick: () => void }
                 : 'bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))]'
             }`}
           >
-            {active ? 'Ativo' : 'Expirado'}
+            {active ? t('coupons.active') : t('coupons.expired')}
           </span>
 
           {coupon.valid_until && (
             <span className="text-xs text-[hsl(var(--muted-foreground))]">
-              Até {formatDate(coupon.valid_until)}
+              {t('coupons.validUntil')} {formatDate(coupon.valid_until)}
             </span>
           )}
         </div>
@@ -109,15 +106,17 @@ function CouponCard({ coupon, onClick }: { coupon: Coupon; onClick: () => void }
 // ─── Empty State ──────────────────────────────────────────────────────────────
 
 function EmptyState() {
+  const { t } = useTranslation()
+
   return (
     <div className="flex flex-col items-center justify-center gap-4 px-8 py-20 text-center">
       <div className="w-16 h-16 rounded-full bg-[hsl(var(--secondary))] flex items-center justify-center">
         <Ticket size={28} className="text-[hsl(var(--muted-foreground))]" />
       </div>
       <div>
-        <p className="text-sm font-medium text-[hsl(var(--foreground))]">Nenhum cupom encontrado</p>
+        <p className="text-sm font-medium text-[hsl(var(--foreground))]">{t('coupons.empty')}</p>
         <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-          Seus cupons aparecerão aqui quando disponíveis.
+          {t('coupons.emptyHint')}
         </p>
       </div>
     </div>
@@ -142,6 +141,7 @@ function SkeletonCard() {
 
 export default function CouponsPage() {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const user = useAuthStore((s) => s.user)
 
   const { data: coupons, isLoading, isError } = useQuery({
@@ -160,11 +160,11 @@ export default function CouponsPage() {
           <button
             onClick={() => navigate(-1)}
             className="absolute left-0 w-7 h-7 flex items-center justify-center rounded-full bg-[hsl(var(--secondary))] text-[hsl(var(--foreground))]"
-            aria-label="Voltar"
+            aria-label={t('common.back')}
           >
             <ArrowLeft size={16} />
           </button>
-          <span className="text-base font-semibold text-[hsl(var(--foreground))]">Cupons</span>
+          <span className="text-base font-semibold text-[hsl(var(--foreground))]">{t('coupons.title')}</span>
           <div className="absolute right-0 w-7 h-7 flex items-center justify-center">
             <Tag size={18} className="text-[hsl(var(--primary))]" />
           </div>
@@ -184,7 +184,7 @@ export default function CouponsPage() {
         {isError && (
           <div className="flex items-center justify-center py-16">
             <p className="text-sm text-[hsl(var(--muted-foreground))] text-center px-8">
-              Erro ao carregar cupons. Tente novamente mais tarde.
+              {t('coupons.loadError')}
             </p>
           </div>
         )}

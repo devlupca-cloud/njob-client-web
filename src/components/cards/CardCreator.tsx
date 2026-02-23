@@ -10,6 +10,7 @@ import {
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import type { Creator } from '@/types'
+import { useTranslation } from 'react-i18next'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -81,6 +82,7 @@ export default function CardCreator({ creator }: CardCreatorProps) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const currentUser = useAuthStore((s) => s.profile)
+  const { t } = useTranslation()
 
   const {
     id,
@@ -157,7 +159,7 @@ export default function CardCreator({ creator }: CardCreatorProps) {
         {(isLive || live_hoje) && (
           <span className="absolute top-1.5 left-1.5 flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold tracking-widest bg-red-600 text-white leading-none">
             <Radio size={8} className="animate-pulse" />
-            LIVE
+            {t('card.liveTag')}
           </span>
         )}
 
@@ -165,7 +167,7 @@ export default function CardCreator({ creator }: CardCreatorProps) {
         <button
           onClick={handleFavorite}
           className="absolute top-1.5 right-1.5 w-6 h-6 flex items-center justify-center rounded-full bg-black/40 backdrop-blur-sm"
-          aria-label={favorito ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
+          aria-label={favorito ? t('card.removeFavorite') : t('card.addFavorite')}
         >
           <Heart
             size={13}
@@ -185,17 +187,17 @@ export default function CardCreator({ creator }: CardCreatorProps) {
           <FeatureIcon
             icon={<Package size={10} />}
             active={vende_conteudo}
-            title="Vende conteúdo"
+            title={t('card.sellsContent')}
           />
           <FeatureIcon
             icon={<Video size={10} />}
             active={faz_chamada_video}
-            title="Chamada de vídeo"
+            title={t('card.videoCall')}
           />
           <FeatureIcon
             icon={<MapPin size={10} />}
             active={faz_encontro_presencial}
-            title="Encontro presencial"
+            title={t('card.inPerson')}
           />
         </div>
 

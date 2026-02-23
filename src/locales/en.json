@@ -1,0 +1,481 @@
+{
+  "common": {
+    "back": "Back",
+    "save": "Save",
+    "saving": "Saving...",
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "search": "Search",
+    "loading": "Loading...",
+    "error": "Error",
+    "tryAgain": "Try again.",
+    "name": "Name",
+    "email": "Email",
+    "password": "Password",
+    "free": "Free",
+    "copy": "Copy",
+    "copied": "Copied!",
+    "description": "Description",
+    "info": "Details",
+    "seeAll": "See all",
+    "seeMore": "See more",
+    "seeLess": "See less",
+    "photos": "Photos",
+    "user": "User",
+    "record": "record",
+    "records": "records",
+    "item": "item",
+    "items": "items"
+  },
+
+  "nav": {
+    "home": "Home",
+    "purchases": "Purchases",
+    "profile": "Profile"
+  },
+
+  "guest": {
+    "title": "Create your account",
+    "description": "To perform this action, you need to create an account. It's quick and free!",
+    "register": "Sign up",
+    "cancel": "Cancel"
+  },
+
+  "auth": {
+    "login": {
+      "welcomeBack": "Welcome back",
+      "label": "Login",
+      "emailPlaceholder": "Enter your email",
+      "passwordLabel": "Password",
+      "passwordPlaceholder": "Enter your password",
+      "rememberMe": "Remember me",
+      "forgotPassword": "Forgot password",
+      "submit": "Sign in",
+      "submitting": "Signing in...",
+      "guestEntry": "Enter as guest",
+      "register": "Sign up",
+      "invalidCredentials": "Invalid email or password.",
+      "genericError": "Login failed. Please try again."
+    },
+    "register": {
+      "title": "Create account",
+      "subtitle": "Enter your information to create your account.",
+      "namePlaceholder": "Enter your full name",
+      "emailPlaceholder": "Enter your best email",
+      "birthDate": "Date of birth",
+      "birthDatePlaceholder": "MM/DD/YYYY",
+      "passwordPlaceholder": "Enter a password",
+      "passwordHint": "Minimum 6 characters",
+      "confirmPassword": "Confirm password",
+      "confirmPasswordPlaceholder": "Confirm your password",
+      "submit": "Sign up",
+      "submitting": "Creating account...",
+      "loginLink": "Sign in",
+      "nameRequired": "Name is required",
+      "nameMinLength": "Name must have at least 2 characters",
+      "nameTooLong": "Name is too long",
+      "emailRequired": "Email is required",
+      "emailInvalid": "Invalid email",
+      "birthDateRequired": "Date of birth is required",
+      "ageMinimum": "You must be at least 18 years old",
+      "passwordRequired": "Password is required",
+      "passwordMinLength": "Password must have at least 6 characters",
+      "confirmPasswordRequired": "Password confirmation is required",
+      "passwordsMismatch": "Passwords do not match",
+      "emailAlreadyUsed": "This email is already registered.",
+      "genericError": "Failed to create account. Please try again."
+    },
+    "forgotPassword": {
+      "title": "Password recovery",
+      "subtitle": "Enter the email registered to your account below. We will send a reset code.",
+      "emailPlaceholder": "Enter your email",
+      "submit": "Recover access",
+      "submitting": "Sending...",
+      "backToLogin": "Back to login",
+      "haveCode": "Already have a code?",
+      "enterCode": "Enter code",
+      "codeSent": "Code sent! Check your inbox.",
+      "emailNotFound": "Email not found. Please check and try again.",
+      "genericError": "Failed to send email. Please try again."
+    },
+    "verifyOTP": {
+      "title": "Code verification",
+      "subtitle": "Enter the 6-digit code sent to",
+      "yourEmail": "your email",
+      "submit": "Confirm",
+      "submitting": "Verifying...",
+      "invalidCode": "Invalid code. Please try again.",
+      "expiredCode": "Invalid or expired code. Please request a new one.",
+      "noCodeReceived": "Didn't receive a code?",
+      "resend": "Resend",
+      "resendTimer": "Request new code in"
+    },
+    "newPassword": {
+      "title": "New password",
+      "subtitle": "Enter your new password below. Choose a strong password with letters and numbers.",
+      "newPasswordLabel": "New password",
+      "newPasswordPlaceholder": "Enter a new password",
+      "confirmLabel": "Confirm password",
+      "confirmPlaceholder": "Confirm the password",
+      "requirements": "Password must contain:",
+      "reqMinChars": "At least 6 characters",
+      "reqLetter": "At least one letter",
+      "reqNumber": "At least one number",
+      "submit": "Confirm",
+      "submitting": "Saving...",
+      "success": "Password changed successfully!",
+      "genericError": "Failed to update password. Please try again.",
+      "passwordRequired": "New password is required",
+      "passwordMinLength": "Password must have at least 6 characters",
+      "passwordNeedLetter": "Password must contain at least one letter",
+      "passwordNeedNumber": "Password must contain at least one number",
+      "passwordsMismatch": "Passwords do not match",
+      "strengthWeak": "Weak",
+      "strengthFair": "Fair",
+      "strengthGood": "Good",
+      "strengthStrong": "Strong"
+    }
+  },
+
+  "home": {
+    "searchPlaceholder": "Search creators...",
+    "noResults": "No results for \"{{query}}\"",
+    "noCreators": "No creators found",
+    "tryOtherSearch": "Try searching for another name.",
+    "comeBackLater": "Come back later to see new profiles.",
+    "loadError": "Failed to load creators. Please try again later.",
+    "filterAll": "All",
+    "filterOnline": "Online",
+    "filterLives": "Lives",
+    "filterContent": "Content",
+    "filterInPerson": "In-person",
+    "filterWomen": "Women",
+    "filterMen": "Men",
+    "sectionLive": "Live now",
+    "sectionOnline": "Online now",
+    "sectionPopular": "Most popular",
+    "sectionNew": "New on the platform"
+  },
+
+  "profile": {
+    "title": "Profile",
+    "changeAvatar": "Change profile picture",
+    "avatarError": "Error uploading avatar:",
+    "logout": "Sign out",
+    "personalInfo": "Personal information",
+    "subscription": "Subscription",
+    "payments": "Payments",
+    "coupons": "Coupons",
+    "financial": "Financial",
+    "purchases": "Purchases",
+    "personalInfoPage": {
+      "title": "Personal information",
+      "name": "Name",
+      "email": "Email",
+      "password": "Password",
+      "language": "Language"
+    },
+    "changeName": {
+      "title": "Change name",
+      "label": "Full name",
+      "placeholder": "Enter your full name",
+      "success": "Name changed successfully!",
+      "genericError": "Failed to save name. Please try again.",
+      "minLength": "Name must have at least 2 characters",
+      "tooLong": "Name is too long"
+    },
+    "changeEmail": {
+      "title": "Change email",
+      "label": "New email",
+      "placeholder": "Enter your new email",
+      "disclaimer": "You will receive a confirmation email at the new address before the change takes effect.",
+      "successTitle": "Check your email",
+      "successSent": "We sent a confirmation link to",
+      "successInstructions": "Click the link to complete the change.",
+      "backToProfile": "Back to profile",
+      "genericError": "Failed to change email. Please try again.",
+      "emailRequired": "Email is required",
+      "emailInvalid": "Invalid email"
+    },
+    "changePassword": {
+      "title": "Change password",
+      "currentLabel": "Current password",
+      "currentPlaceholder": "Enter your current password",
+      "newLabel": "New password",
+      "newPlaceholder": "Enter the new password",
+      "confirmLabel": "Confirm new password",
+      "confirmPlaceholder": "Confirm the new password",
+      "hint": "The new password must have at least 6 characters and be different from the current one.",
+      "successTitle": "Password changed!",
+      "successMessage": "Your password has been updated successfully.",
+      "genericError": "Failed to change password. Please try again.",
+      "currentRequired": "Current password is required",
+      "newMinLength": "New password must have at least 6 characters",
+      "confirmRequired": "Password confirmation is required",
+      "sameAsOld": "New password cannot be the same as the current one",
+      "mismatch": "Passwords do not match",
+      "showPassword": "Show password",
+      "hidePassword": "Hide password"
+    },
+    "changeLanguage": {
+      "title": "Language",
+      "subtitle": "Select your preferred language.",
+      "savePreference": "Save preference",
+      "saved": "Saved!"
+    }
+  },
+
+  "creator": {
+    "notFound": "Could not load profile. Please try again.",
+    "liveWith": "Live with",
+    "freeLive": "Free",
+    "joinLive": "Join live",
+    "buyTicket": "Buy ticket",
+    "videoCall": "Individual call",
+    "videoCallDisclaimer": "The service provider has the right to decline the call if the client does not comply with the terms of use.",
+    "videoCallOnline": "This user is online and you can start a video call now.",
+    "callNow": "Call now",
+    "contentPurchase": "Content Purchase",
+    "content": "Content",
+    "includedInPack": "included in this pack",
+    "buyFor": "Buy for",
+    "noSubscriptionPlans": "No subscription plans available",
+    "liveNow": "LIVE — Join",
+    "like": "Like",
+    "sendMessage": "Send message",
+    "messageError": "Could not open the conversation. Please try again.",
+    "subscribing": "Subscribing",
+    "subscribe": "Subscribe",
+    "likes": "likes",
+    "subscribers": "subscribers",
+    "sellsContent": "Sells content",
+    "exclusiveContent": "Exclusive photos, videos and audios",
+    "videoCallLabel": "Video call",
+    "startingAt": "Starting at",
+    "per30min": "/30min",
+    "availableNow": "Available now",
+    "inPersonMeeting": "In-person meeting",
+    "onDemand": "On demand",
+    "perHour": "/hour",
+    "packs": "Packs",
+    "liveNowLabel": "Live now",
+    "upcomingEvents": "Upcoming events",
+    "liveTag": "LIVE",
+    "freeTag": "Free",
+    "about": "About",
+    "report": "Report",
+    "block": "Block",
+    "shareProfile": "Share profile",
+    "seeAllContent": "See all content",
+    "checkoutError": "Failed to create checkout. Please try again."
+  },
+
+  "chat": {
+    "conversations": {
+      "title": "Messages",
+      "searchPlaceholder": "Search conversations...",
+      "closeSearch": "Close search",
+      "noResults": "No conversations found",
+      "empty": "No conversations yet",
+      "noResultsHint": "Try searching for another name",
+      "emptyHint": "Your messages with creators will appear here",
+      "noName": "No name",
+      "startConversation": "Start conversation"
+    },
+    "page": {
+      "title": "Conversation",
+      "online": "Online",
+      "emptyHint": "Send a message to start the conversation",
+      "inputPlaceholder": "Write your message...",
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "send": "Send message"
+    }
+  },
+
+  "subscription": {
+    "title": "Subscription",
+    "popular": "POPULAR",
+    "current": "CURRENT",
+    "currentPlan": "Current plan",
+    "contractPlan": "Subscribe",
+    "activeSubscription": "Active subscription",
+    "renewsAt": "Renews on {{date}}",
+    "loadError": "Failed to load plans. Please try again.",
+    "opening": "Opening...",
+    "manageSubscription": "Manage subscription",
+    "success": "Subscription completed successfully!",
+    "checkoutCanceled": "Checkout canceled.",
+    "noPlansAvailable": "No subscription plans available",
+    "checkoutError": "Failed to start checkout. Please try again.",
+    "portalError": "Failed to open management portal.",
+    "mySubscription": "My Subscription",
+    "otherPlans": "Other Plans",
+    "availablePlans": "Available Plans",
+    "noPlansNow": "No plans available at the moment.",
+    "cancelAnytime": "Cancel anytime. No commitment."
+  },
+
+  "coupons": {
+    "title": "Coupons",
+    "active": "Active",
+    "expired": "Expired",
+    "validUntil": "Until",
+    "copyCode": "Copy code",
+    "empty": "No coupons found",
+    "emptyHint": "Your coupons will appear here when available.",
+    "loadError": "Failed to load coupons. Please try again later.",
+    "detail": {
+      "title": "Coupon Details",
+      "notFound": "Coupon not found",
+      "loadError": "Could not load the coupon.",
+      "promoCode": "Promo Code",
+      "discountType": "Discount type",
+      "percentage": "Percentage (%)",
+      "fixedValue": "Fixed value ($)",
+      "validUntil": "Valid until",
+      "store": "Store"
+    }
+  },
+
+  "financial": {
+    "title": "Financial",
+    "transactions": "Transactions",
+    "balance": "Balance",
+    "income": "Income",
+    "expenses": "Expenses",
+    "loadError": "Failed to load transactions. Please try again.",
+    "empty": "No transactions in the selected period.",
+    "periods": {
+      "thisMonth": "This month",
+      "3months": "3 months",
+      "6months": "6 months",
+      "1year": "1 year",
+      "all": "All"
+    },
+    "types": {
+      "packPurchase": "Pack purchase",
+      "subscription": "Subscription",
+      "videoCall": "Video call",
+      "liveTicket": "Live ticket",
+      "refund": "Refund"
+    },
+    "statuses": {
+      "pending": "Pending",
+      "completed": "Completed",
+      "failed": "Failed",
+      "refunded": "Refunded"
+    }
+  },
+
+  "purchases": {
+    "title": "Purchases",
+    "tabs": {
+      "packs": "Packs",
+      "lives": "Lives",
+      "calls": "Calls"
+    },
+    "statuses": {
+      "pending": "Pending",
+      "confirmed": "Confirmed",
+      "done": "Completed",
+      "canceled": "Canceled"
+    },
+    "emptyPacks": "You haven't purchased any packs yet.",
+    "emptyLives": "You haven't purchased any live tickets yet.",
+    "emptyCalls": "You haven't scheduled any calls yet.",
+    "liveStatuses": {
+      "live": "Live",
+      "scheduled": "Scheduled",
+      "ended": "Ended"
+    },
+    "freeTag": "Free",
+    "packRemoved": "Pack removed",
+    "liveRemoved": "Live removed",
+    "loadError": "Failed to load purchases. Please try again."
+  },
+
+  "payments": {
+    "savedCards": {
+      "title": "Payment Cards",
+      "default": "DEFAULT",
+      "confirmRemove": "Click again to confirm",
+      "removeCard": "Remove card",
+      "removeError": "Failed to remove card. Please try again.",
+      "empty": "No cards registered",
+      "emptyHint": "Add a card to make your payments easier.",
+      "addCard": "Add card",
+      "addNew": "Add new card",
+      "loadError": "Failed to load cards. Please try again."
+    },
+    "addCard": {
+      "title": "Add Card",
+      "comingSoon": "Coming soon",
+      "comingSoonDescription": "Card registration is being implemented with secure Stripe integration. For now, payment is made directly at checkout.",
+      "stripeInfo": "Payments securely processed by Stripe."
+    }
+  },
+
+  "notifications": {
+    "title": "Notifications",
+    "all": "All",
+    "unread": "Unread",
+    "markAsRead": "Tap to mark as read",
+    "markReadError": "Error marking as read",
+    "allRead": "All notifications have been marked as read",
+    "markAllError": "Error marking notifications",
+    "markAllRead": "Mark all as read",
+    "allCaughtUp": "All caught up!",
+    "allCaughtUpHint": "No unread notifications. You're all caught up.",
+    "seeAll": "See all",
+    "empty": "No notifications",
+    "emptyHint": "When you have notifications they will appear here."
+  },
+
+  "card": {
+    "sellsContent": "Sells content",
+    "videoCall": "Video call",
+    "inPerson": "In-person meeting",
+    "removeFavorite": "Remove from favorites",
+    "addFavorite": "Add to favorites",
+    "liveTag": "LIVE"
+  },
+
+  "callRoom": {
+    "title": "Video Call",
+    "back": "Back",
+    "unauthorized": "You do not have permission to access this call.",
+    "loadError": "Failed to load call data.",
+    "goToPurchases": "Go to purchases",
+    "callWith": "Call with {{creatorName}}",
+    "roomOpensEarly": "The room opens 5 minutes before the scheduled time. Come back at {{time}}.",
+    "callEnded": "Call ended",
+    "callPast": "This call has already passed its scheduled time.",
+    "seePurchases": "See my purchases",
+    "connecting": "Joining call with {{creatorName}}..."
+  },
+
+  "contentPage": {
+    "gallery": "Content gallery",
+    "filterAll": "All",
+    "filterPhotos": "Photos",
+    "filterVideos": "Videos",
+    "filterAudios": "Audios",
+    "emptyAll": "No content available yet.",
+    "emptyPhotos": "No photos available.",
+    "emptyVideos": "No videos available.",
+    "emptyAudios": "No audios available.",
+    "loadError": "Error loading content. Please try again.",
+    "purchaseTitle": "Content Purchase",
+    "info": "Info",
+    "contentLabel": "Content",
+    "processing": "Processing...",
+    "buyFor": "Buy for"
+  },
+
+  "notFound": {
+    "title": "Page not found",
+    "description": "The page you are looking for does not exist or has been moved.",
+    "goHome": "Go to Home"
+  }
+}

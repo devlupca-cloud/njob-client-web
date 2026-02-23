@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -7,26 +6,28 @@ import { useAuth } from '@/hooks/useAuth'
 import { AuthInput } from '@/components/ui/AuthInput'
 import Logo from '@/components/ui/Logo'
 import { useToast } from '@/components/ui/Toast'
-
-const schema = z.object({
-  email: z
-    .string()
-    .min(1, 'E-mail é obrigatório')
-    .email('E-mail inválido'),
-  password: z
-    .string()
-    .min(1, 'Senha é obrigatória'),
-})
-
-type FormData = z.infer<typeof schema>
+import { useTranslation } from 'react-i18next'
 
 export default function LoginPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const prefillEmail = searchParams.get('email') ?? ''
-  const { signIn } = useAuth()
+  const { signIn, enterAsGuest } = useAuth()
   const { toast } = useToast()
-  const [rememberMe, setRememberMe] = useState(false)
+  const { t } = useTranslation()
+
+
+  const schema = z.object({
+    email: z
+      .string()
+      .min(1, t('auth.register.emailRequired'))
+      .email(t('auth.register.emailInvalid')),
+    password: z
+      .string()
+      .min(1, t('auth.register.passwordRequired')),
+  })
+
+  type FormData = z.infer<typeof schema>
 
   const {
     register,
@@ -44,7 +45,7 @@ export default function LoginPage() {
       navigate('/home', { replace: true })
     } catch (err: unknown) {
       const message =
-        err instanceof Error ? err.message : 'Erro ao fazer login. Tente novamente.'
+        err instanceof Error ? err.message : t('auth.login.genericError')
 
       if (
         message.toLowerCase().includes('invalid') ||
@@ -52,7 +53,7 @@ export default function LoginPage() {
         message.toLowerCase().includes('email') ||
         message.toLowerCase().includes('user')
       ) {
-        toast({ title: 'E-mail ou senha incorretos.', type: 'error' })
+        toast({ title: t('auth.login.invalidCredentials'), type: 'error' })
       } else {
         toast({ title: message, type: 'error' })
       }
@@ -67,7 +68,7 @@ export default function LoginPage() {
         <div className="flex flex-col items-center gap-4">
           <Logo size="xl" variant="image" />
           <p className="text-[hsl(var(--muted-foreground))] text-sm">
-            Bem-vindo de volta
+            {t('auth.login.welcomeBack')}
           </p>
         </div>
 
@@ -75,9 +76,9 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5" noValidate>
 
           <AuthInput
-            label="Login"
+            label={t('auth.login.label')}
             type="email"
-            placeholder="Digite seu e-mail"
+            placeholder={t('auth.login.emailPlaceholder')}
             autoComplete="email"
             autoCapitalize="none"
             {...register('email')}
@@ -85,37 +86,16 @@ export default function LoginPage() {
           />
 
           <AuthInput
-            label="Senha"
+            label={t('auth.login.passwordLabel')}
             type="password"
-            placeholder="Digite sua senha"
+            placeholder={t('auth.login.passwordPlaceholder')}
             autoComplete="current-password"
             {...register('password')}
             error={errors.password?.message}
           />
 
-          {/* Remember me + Forgot password */}
-          <div className="flex items-center justify-between">
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <button
-                type="button"
-                role="checkbox"
-                aria-checked={rememberMe}
-                onClick={() => setRememberMe((v) => !v)}
-                className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                  rememberMe
-                    ? 'bg-[hsl(var(--primary))] border-[hsl(var(--primary))]'
-                    : 'border-[hsl(var(--border))] bg-transparent'
-                }`}
-              >
-                {rememberMe && (
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                )}
-              </button>
-              <span className="text-sm text-[hsl(var(--muted-foreground))]">Lembrar-me</span>
-            </label>
-
+          {/* Forgot password */}
+          <div className="flex items-center justify-end">
             <button
               type="button"
               onClick={() => {
@@ -124,7 +104,7 @@ export default function LoginPage() {
               }}
               className="text-sm font-semibold text-[hsl(var(--primary))] hover:text-[hsl(var(--primary)/0.8)] transition-colors"
             >
-              Esqueci a senha
+              {t('auth.login.forgotPassword')}
             </button>
           </div>
 
@@ -142,13 +122,25 @@ export default function LoginPage() {
             {isSubmitting ? (
               <>
                 <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Entrando...
+                {t('auth.login.submitting')}
               </>
             ) : (
-              'Entrar'
+              t('auth.login.submit')
             )}
           </button>
         </form>
+
+        {/* Guest entry */}
+        <button
+          type="button"
+          onClick={() => {
+            enterAsGuest()
+            navigate('/home', { replace: true })
+          }}
+          className="w-full text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
+        >
+          {t('auth.login.guestEntry')}
+        </button>
 
         {/* Register link */}
         <div className="text-center">
@@ -156,7 +148,7 @@ export default function LoginPage() {
             to="/register"
             className="text-sm font-semibold text-[hsl(var(--primary))] hover:text-[hsl(var(--primary)/0.8)] transition-colors"
           >
-            Cadastro
+            {t('auth.login.register')}
           </Link>
         </div>
       </div>

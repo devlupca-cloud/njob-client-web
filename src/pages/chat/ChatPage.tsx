@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Send, Check, CheckCheck } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
+import { useTranslation } from 'react-i18next'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -50,7 +51,7 @@ interface LocationState {
 function formatTime(isoString: string | null): string {
   if (!isoString) return ''
   const date = new Date(isoString)
-  return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
 }
 
 function formatDateLabel(isoString: string | null): string {
@@ -61,7 +62,7 @@ function formatDateLabel(isoString: string | null): string {
     date.getFullYear() === now.getFullYear() &&
     date.getMonth() === now.getMonth() &&
     date.getDate() === now.getDate()
-  if (isToday) return 'Hoje'
+  if (isToday) return '_TODAY_'
 
   const yesterday = new Date(now)
   yesterday.setDate(now.getDate() - 1)
@@ -69,9 +70,9 @@ function formatDateLabel(isoString: string | null): string {
     date.getFullYear() === yesterday.getFullYear() &&
     date.getMonth() === yesterday.getMonth() &&
     date.getDate() === yesterday.getDate()
-  if (isYesterday) return 'Ontem'
+  if (isYesterday) return '_YESTERDAY_'
 
-  return date.toLocaleDateString('pt-BR', {
+  return date.toLocaleDateString(undefined, {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -201,6 +202,7 @@ export default function ChatPage() {
   const state = (location.state ?? {}) as LocationState
   const user = useAuthStore((s) => s.user)
   const queryClient = useQueryClient()
+  const { t } = useTranslation()
 
   const [messages, setMessages] = useState<VwMessage[]>([])
   const [inputText, setInputText] = useState('')
@@ -219,10 +221,11 @@ export default function ChatPage() {
         .from('vw_messages')
         .select('*')
         .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: true })
+        .order('created_at', { ascending: false })
+        .limit(100)
 
       if (error) throw error
-      const rows = (data ?? []) as VwMessage[]
+      const rows = ((data ?? []) as VwMessage[]).reverse()
       setMessages(rows)
       return rows
     },
@@ -381,25 +384,20 @@ export default function ChatPage() {
 
   // ── Peer info (from location state or first message) ────────────────────────
 
-  const peerName =
-    state.peerName ??
-    (messages.length > 0
-      ? messages[0].sender_id !== user?.id
-        ? messages[0].sender_name
-        : messages[0].creator_id !== user?.id
-          ? messages[0].creator_name
-          : messages[0].client_name
-      : null)
+  const peerInfo = (() => {
+    if (state.peerName) return { name: state.peerName, avatar: state.peerAvatarUrl ?? null }
+    if (messages.length === 0) return { name: null, avatar: null }
+    const first = messages[0]
+    const isOtherSender = first.sender_id !== user?.id
+    if (isOtherSender) return { name: first.sender_name, avatar: first.sender_avatar_url }
+    const isCreatorPeer = first.creator_id !== user?.id
+    return isCreatorPeer
+      ? { name: first.creator_name, avatar: first.creator_avatar_url }
+      : { name: first.client_name, avatar: first.client_avatar_url }
+  })()
 
-  const peerAvatarUrl =
-    state.peerAvatarUrl ??
-    (messages.length > 0
-      ? messages[0].sender_id !== user?.id
-        ? messages[0].sender_avatar_url
-        : messages[0].creator_id !== user?.id
-          ? messages[0].creator_avatar_url
-          : messages[0].client_avatar_url
-      : null)
+  const peerName = peerInfo.name
+  const peerAvatarUrl = peerInfo.avatar
 
   const peerIsOnline = state.peerIsOnline ?? false
 
@@ -416,7 +414,7 @@ export default function ChatPage() {
         <button
           onClick={() => navigate('/chat')}
           className="p-1.5 -ml-1.5 text-[hsl(var(--foreground))] rounded-full hover:bg-[hsl(var(--card))] transition-colors"
-          aria-label="Voltar"
+          aria-label={t('common.back')}
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
@@ -425,10 +423,10 @@ export default function ChatPage() {
 
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-[hsl(var(--foreground))] truncate">
-            {peerName ?? 'Conversa'}
+            {peerName ?? t('chat.page.title')}
           </p>
           {peerIsOnline && (
-            <p className="text-xs text-green-500">Online</p>
+            <p className="text-xs text-green-500">{t('chat.page.online')}</p>
           )}
         </div>
       </div>
@@ -440,14 +438,14 @@ export default function ChatPage() {
         {isLoading ? (
           /* Loading skeleton */
           <div className="flex flex-col gap-4">
-            {Array.from({ length: 5 }).map((_, i) => (
+            {[65, 45, 55, 40, 60].map((w, i) => (
               <div
                 key={i}
                 className={`flex ${i % 2 === 0 ? 'justify-end' : 'justify-start'}`}
               >
                 <div
                   className="h-10 rounded-2xl bg-[hsl(var(--muted))] animate-pulse"
-                  style={{ width: `${40 + Math.random() * 30}%` }}
+                  style={{ width: `${w}%` }}
                 />
               </div>
             ))}
@@ -458,7 +456,7 @@ export default function ChatPage() {
               <Send className="w-6 h-6 text-[hsl(var(--muted-foreground))]" />
             </div>
             <p className="text-[hsl(var(--muted-foreground))] text-sm">
-              Envie uma mensagem para iniciar a conversa
+              {t('chat.page.emptyHint')}
             </p>
           </div>
         ) : (
@@ -472,7 +470,7 @@ export default function ChatPage() {
               return (
                 <div key={msg.message_id ?? index}>
                   {showDateDivider && (
-                    <DateDivider label={formatDateLabel(msg.created_at)} />
+                    <DateDivider label={formatDateLabel(msg.created_at).replace('_TODAY_', t('chat.page.today')).replace('_YESTERDAY_', t('chat.page.yesterday'))} />
                   )}
                   <MessageBubble msg={msg} isMine={isMine} />
                 </div>
@@ -494,7 +492,7 @@ export default function ChatPage() {
             value={inputText}
             onChange={handleInput}
             onKeyDown={handleKeyDown}
-            placeholder="Escreva sua mensagem..."
+            placeholder={t('chat.page.inputPlaceholder')}
             className="flex-1 bg-transparent resize-none outline-none text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] leading-relaxed max-h-[120px] overflow-y-auto"
           />
         </div>
@@ -502,7 +500,7 @@ export default function ChatPage() {
         <button
           onClick={handleSend}
           disabled={!inputText.trim() || isSending}
-          aria-label="Enviar mensagem"
+          aria-label={t('chat.page.send')}
           className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 transition-all"
           style={{
             backgroundColor:

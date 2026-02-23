@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import {
   Bell,
   CheckCircle2,
@@ -68,6 +69,7 @@ async function fetchNotifications(userId: string): Promise<AppNotification[]> {
     .select('*')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
+    .limit(50)
 
   if (error) throw error
   return (data ?? []) as AppNotification[]
@@ -121,6 +123,7 @@ interface NotificationItemProps {
 }
 
 function NotificationItem({ notification, onMarkRead, isMarkingRead }: NotificationItemProps) {
+  const { t } = useTranslation()
   const style = typeStyles[notification.type]
 
   const handleTap = () => {
@@ -144,7 +147,7 @@ function NotificationItem({ notification, onMarkRead, isMarkingRead }: Notificat
       ]
         .filter(Boolean)
         .join(' ')}
-      aria-label={notification.is_read ? notification.title : `Marcar como lida: ${notification.title}`}
+      aria-label={notification.is_read ? notification.title : `${t('notifications.markAsRead')}: ${notification.title}`}
     >
       {/* Type icon */}
       <span
@@ -177,7 +180,7 @@ function NotificationItem({ notification, onMarkRead, isMarkingRead }: Notificat
         )}
         {!notification.is_read && (
           <p className="mt-1.5 text-[11px] text-[hsl(var(--primary))] font-medium">
-            Toque para marcar como lida
+            {t('notifications.markAsRead')}
           </p>
         )}
       </div>
@@ -194,9 +197,10 @@ interface FilterTabsProps {
 }
 
 function FilterTabs({ active, onChange, unreadCount }: FilterTabsProps) {
+  const { t } = useTranslation()
   const tabs: { key: FilterTab; label: string }[] = [
-    { key: 'all', label: 'Todas' },
-    { key: 'unread', label: 'Não lidas' },
+    { key: 'all', label: t('notifications.all') },
+    { key: 'unread', label: t('notifications.unread') },
   ]
 
   return (
@@ -234,6 +238,7 @@ function FilterTabs({ active, onChange, unreadCount }: FilterTabsProps) {
 
 export default function NotificationsPage() {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { toast } = useToast()
   const userId = useAuthStore((s) => s.user?.id)
@@ -267,7 +272,7 @@ export default function NotificationsPage() {
       if (ctx?.prev) {
         queryClient.setQueryData(['notifications', userId], ctx.prev)
       }
-      toast({ title: 'Erro ao marcar como lida', type: 'error' })
+      toast({ title: t('notifications.markReadError'), type: 'error' })
     },
   })
 
@@ -284,13 +289,13 @@ export default function NotificationsPage() {
       return { prev }
     },
     onSuccess: () => {
-      toast({ title: 'Todas as notificações foram marcadas como lidas', type: 'success' })
+      toast({ title: t('notifications.allRead'), type: 'success' })
     },
     onError: (_err, _vars, ctx) => {
       if (ctx?.prev) {
         queryClient.setQueryData(['notifications', userId], ctx.prev)
       }
-      toast({ title: 'Erro ao marcar notificações', type: 'error' })
+      toast({ title: t('notifications.markAllError'), type: 'error' })
     },
   })
 
@@ -314,7 +319,7 @@ export default function NotificationsPage() {
       <button
         onClick={handleMarkAll}
         disabled={isMarkingAll}
-        aria-label="Marcar todas como lidas"
+        aria-label={t('notifications.markAllRead')}
         className="flex items-center justify-center w-9 h-9 rounded-full
           text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))]
           hover:bg-[hsl(var(--secondary))] active:scale-95
@@ -333,17 +338,17 @@ export default function NotificationsPage() {
       return (
         <EmptyState
           icon={<CheckCircle2 />}
-          title="Tudo em dia!"
-          description="Nenhuma notificação não lida. Você está em dia com tudo."
-          action={{ label: 'Ver todas', onClick: () => setFilter('all') }}
+          title={t('notifications.allCaughtUp')}
+          description={t('notifications.allCaughtUpHint')}
+          action={{ label: t('notifications.seeAll'), onClick: () => setFilter('all') }}
         />
       )
     }
     return (
       <EmptyState
         icon={<Bell />}
-        title="Sem notificações"
-        description="Quando você tiver notificações elas aparecerão aqui."
+        title={t('notifications.empty')}
+        description={t('notifications.emptyHint')}
       />
     )
   })()
@@ -353,7 +358,7 @@ export default function NotificationsPage() {
   return (
     <div className="min-h-screen bg-[hsl(var(--background))]">
         <PageHeader
-          title="Notificações"
+          title={t('notifications.title')}
           onBack={() => navigate(-1)}
           rightAction={rightAction}
         />

@@ -2,11 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   User,
-  FileSignature,
-  CreditCard,
   Tag,
-  DollarSign,
-  ShoppingBag,
   ChevronRight,
   LogOut,
   Camera,
@@ -15,6 +11,7 @@ import {
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { useAuth } from '@/hooks/useAuth'
+import { useTranslation } from 'react-i18next'
 
 interface NavSection {
   icon: React.ElementType
@@ -23,24 +20,20 @@ interface NavSection {
   danger?: boolean
 }
 
-const sections: NavSection[] = [
-  { icon: User, label: 'Informações pessoais', path: '/profile/info' },
-  { icon: FileSignature, label: 'Assinatura', path: '/subscription' },
-  { icon: CreditCard, label: 'Pagamentos', path: '/payments/cards' },
-  { icon: Tag, label: 'Cupons', path: '/coupons' },
-  { icon: DollarSign, label: 'Financeiro', path: '/financial' },
-  { icon: ShoppingBag, label: 'Compras', path: '/purchases' },
-]
-
 export default function ProfilePage() {
   const navigate = useNavigate()
   const { signOut } = useAuth()
   const { profile, user, setProfile } = useAuthStore()
+  const { t } = useTranslation()
   const [uploading, setUploading] = useState(false)
   const [avatarError, setAvatarError] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Busca dados atualizados do perfil ao montar
+  const sections: NavSection[] = [
+    { icon: User, label: t('profile.personalInfo'), path: '/profile/info' },
+    { icon: Tag, label: t('profile.coupons'), path: '/coupons' },
+  ]
+
   useEffect(() => {
     if (!user?.id) return
     supabase
@@ -86,10 +79,9 @@ export default function ProfilePage() {
       setProfile({ ...profile!, avatar_url })
       setAvatarError(false)
     } catch (err) {
-      console.error('Erro ao fazer upload do avatar:', err)
+      console.error(t('profile.avatarError'), err)
     } finally {
       setUploading(false)
-      // Reset input para permitir re-upload do mesmo arquivo
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
@@ -99,7 +91,7 @@ export default function ProfilePage() {
     navigate('/login', { replace: true })
   }
 
-  const displayName = profile?.full_name ?? user?.email?.split('@')[0] ?? 'Usuário'
+  const displayName = profile?.full_name ?? user?.email?.split('@')[0] ?? t('common.user')
   const username = profile?.username ? `@${profile.username}` : user?.email ?? ''
   const avatarUrl = !avatarError && profile?.avatar_url ? profile.avatar_url : null
 
@@ -108,7 +100,7 @@ export default function ProfilePage() {
       {/* Header */}
       <div className="sticky top-0 z-10 bg-[hsl(var(--background))] border-b border-[hsl(var(--border))]">
         <div className="flex items-center justify-center h-14 px-4 max-w-2xl mx-auto">
-          <h1 className="text-base font-semibold text-[hsl(var(--foreground))]">Perfil</h1>
+          <h1 className="text-base font-semibold text-[hsl(var(--foreground))]">{t('profile.title')}</h1>
         </div>
       </div>
 
@@ -119,7 +111,7 @@ export default function ProfilePage() {
             onClick={handleAvatarClick}
             disabled={uploading}
             className="relative w-24 h-24 rounded-full overflow-hidden bg-[hsl(var(--card))] border-2 border-[hsl(var(--border))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))] focus:ring-offset-2 focus:ring-offset-[hsl(var(--background))]"
-            aria-label="Alterar foto de perfil"
+            aria-label={t('profile.changeAvatar')}
           >
             {avatarUrl ? (
               <img
@@ -134,7 +126,6 @@ export default function ProfilePage() {
               </div>
             )}
 
-            {/* Overlay de upload */}
             <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
               {uploading ? (
                 <Loader2 className="w-6 h-6 text-white animate-spin" />
@@ -144,7 +135,6 @@ export default function ProfilePage() {
             </div>
           </button>
 
-          {/* Indicador de edição */}
           <button
             onClick={handleAvatarClick}
             disabled={uploading}
@@ -164,7 +154,7 @@ export default function ProfilePage() {
           />
         </div>
 
-        {/* Nome e username */}
+        {/* Name and username */}
         <div className="text-center">
           <h2 className="text-xl font-bold text-[hsl(var(--foreground))]">{displayName}</h2>
           {username && (
@@ -173,7 +163,7 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* Seções de navegação */}
+      {/* Navigation sections */}
       <div className="px-4 mt-4 max-w-2xl mx-auto">
         <div className="bg-[hsl(var(--card))] rounded-2xl overflow-hidden border border-[hsl(var(--border))]">
           {sections.map(({ icon: Icon, label, path }, index) => (
@@ -194,7 +184,7 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* Botão de logout */}
+      {/* Logout button */}
       <div className="px-4 mt-4 max-w-2xl mx-auto">
         <div className="bg-[hsl(var(--card))] rounded-2xl overflow-hidden border border-[hsl(var(--border))]">
           <button
@@ -202,7 +192,7 @@ export default function ProfilePage() {
             className="w-full flex items-center gap-3 px-4 h-14 text-left hover:bg-red-500/5 active:bg-red-500/10 transition-colors"
           >
             <LogOut className="w-5 h-5 text-red-500 shrink-0" />
-            <span className="flex-1 text-sm text-red-500 font-medium">Sair da conta</span>
+            <span className="flex-1 text-sm text-red-500 font-medium">{t('profile.logout')}</span>
           </button>
         </div>
       </div>

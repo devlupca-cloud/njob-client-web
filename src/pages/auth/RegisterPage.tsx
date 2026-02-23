@@ -5,46 +5,52 @@ import { z } from 'zod'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { AuthInput } from '@/components/ui/AuthInput'
-
-const schema = z
-  .object({
-    fullName: z
-      .string()
-      .min(1, 'Nome é obrigatório')
-      .min(2, 'Nome deve ter pelo menos 2 caracteres')
-      .max(100, 'Nome muito longo'),
-    email: z
-      .string()
-      .min(1, 'E-mail é obrigatório')
-      .email('E-mail inválido'),
-    dateBirth: z
-      .string()
-      .min(1, 'Data de nascimento é obrigatória')
-      .refine((val) => {
-        const date = new Date(val)
-        const now = new Date()
-        const age = now.getFullYear() - date.getFullYear()
-        return age >= 18
-      }, 'Você deve ter pelo menos 18 anos'),
-    password: z
-      .string()
-      .min(1, 'Senha é obrigatória')
-      .min(6, 'A senha deve ter pelo menos 6 caracteres'),
-    confirmPassword: z
-      .string()
-      .min(1, 'Confirmação de senha é obrigatória'),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: 'As senhas não coincidem',
-    path: ['confirmPassword'],
-  })
-
-type FormData = z.infer<typeof schema>
+import { useTranslation } from 'react-i18next'
 
 export default function RegisterPage() {
   const navigate = useNavigate()
   const { signUp } = useAuth()
+  const { t } = useTranslation()
   const [serverError, setServerError] = useState<string | null>(null)
+
+  const schema = z
+    .object({
+      fullName: z
+        .string()
+        .min(1, t('auth.register.nameRequired'))
+        .min(2, t('auth.register.nameMinLength'))
+        .max(100, t('auth.register.nameTooLong')),
+      email: z
+        .string()
+        .min(1, t('auth.register.emailRequired'))
+        .email(t('auth.register.emailInvalid')),
+      dateBirth: z
+        .string()
+        .min(1, t('auth.register.birthDateRequired'))
+        .refine((val) => {
+          const birth = new Date(val)
+          const now = new Date()
+          let age = now.getFullYear() - birth.getFullYear()
+          const monthDiff = now.getMonth() - birth.getMonth()
+          if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < birth.getDate())) {
+            age--
+          }
+          return age >= 18
+        }, t('auth.register.ageMinimum')),
+      password: z
+        .string()
+        .min(1, t('auth.register.passwordRequired'))
+        .min(6, t('auth.register.passwordMinLength')),
+      confirmPassword: z
+        .string()
+        .min(1, t('auth.register.confirmPasswordRequired')),
+    })
+    .refine((data) => data.password === data.confirmPassword, {
+      message: t('auth.register.passwordsMismatch'),
+      path: ['confirmPassword'],
+    })
+
+  type FormData = z.infer<typeof schema>
 
   const {
     register,
@@ -61,14 +67,14 @@ export default function RegisterPage() {
       navigate('/home', { replace: true })
     } catch (err: unknown) {
       const message =
-        err instanceof Error ? err.message : 'Erro ao criar conta. Tente novamente.'
+        err instanceof Error ? err.message : t('auth.register.genericError')
 
       if (
         message.toLowerCase().includes('already registered') ||
         message.toLowerCase().includes('already exists') ||
         message.toLowerCase().includes('email')
       ) {
-        setServerError('Este e-mail já está cadastrado.')
+        setServerError(t('auth.register.emailAlreadyUsed'))
       } else {
         setServerError(message)
       }
@@ -82,10 +88,10 @@ export default function RegisterPage() {
         {/* Header */}
         <div className="flex flex-col gap-2">
           <h1 className="text-3xl font-bold text-[hsl(var(--foreground))] tracking-tight">
-            Novo cadastro
+            {t('auth.register.title')}
           </h1>
           <p className="text-[hsl(var(--muted-foreground))] text-sm leading-relaxed">
-            Insira as informações para cadastrar sua conta.
+            {t('auth.register.subtitle')}
           </p>
         </div>
 
@@ -93,9 +99,9 @@ export default function RegisterPage() {
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5" noValidate>
 
           <AuthInput
-            label="Nome"
+            label={t('common.name')}
             type="text"
-            placeholder="Digite seu nome completo"
+            placeholder={t('auth.register.namePlaceholder')}
             autoComplete="name"
             autoCapitalize="words"
             {...register('fullName')}
@@ -103,9 +109,9 @@ export default function RegisterPage() {
           />
 
           <AuthInput
-            label="E-mail"
+            label={t('common.email')}
             type="email"
-            placeholder="Digite seu melhor e-mail"
+            placeholder={t('auth.register.emailPlaceholder')}
             autoComplete="email"
             autoCapitalize="none"
             {...register('email')}
@@ -113,28 +119,28 @@ export default function RegisterPage() {
           />
 
           <AuthInput
-            label="Data de nascimento"
+            label={t('auth.register.birthDate')}
             type="date"
-            placeholder="DD/MM/AAAA"
+            placeholder={t('auth.register.birthDatePlaceholder')}
             autoComplete="bday"
             {...register('dateBirth')}
             error={errors.dateBirth?.message}
           />
 
           <AuthInput
-            label="Senha"
+            label={t('common.password')}
             type="password"
-            placeholder="Digite uma senha"
+            placeholder={t('auth.register.passwordPlaceholder')}
             autoComplete="new-password"
-            hint="Mínimo 6 caracteres"
+            hint={t('auth.register.passwordHint')}
             {...register('password')}
             error={errors.password?.message}
           />
 
           <AuthInput
-            label="Confirmar senha"
+            label={t('auth.register.confirmPassword')}
             type="password"
-            placeholder="Confirme sua senha"
+            placeholder={t('auth.register.confirmPasswordPlaceholder')}
             autoComplete="new-password"
             {...register('confirmPassword')}
             error={errors.confirmPassword?.message}
@@ -177,10 +183,10 @@ export default function RegisterPage() {
             {isSubmitting ? (
               <>
                 <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Cadastrando...
+                {t('auth.register.submitting')}
               </>
             ) : (
-              'Cadastrar'
+              t('auth.register.submit')
             )}
           </button>
         </form>
@@ -191,7 +197,7 @@ export default function RegisterPage() {
             to="/login"
             className="text-sm font-semibold text-[hsl(var(--primary))] hover:text-[hsl(var(--primary)/0.8)] transition-colors"
           >
-            Fazer login
+            {t('auth.register.loginLink')}
           </Link>
         </div>
       </div>

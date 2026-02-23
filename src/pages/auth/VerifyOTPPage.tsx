@@ -1,6 +1,7 @@
 import { useRef, useState, useCallback, useEffect, type KeyboardEvent, type ClipboardEvent } from 'react'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
+import { useTranslation } from 'react-i18next'
 
 const OTP_LENGTH = 6
 
@@ -9,19 +10,18 @@ export default function VerifyOTPPage() {
   const [searchParams] = useSearchParams()
   const email = searchParams.get('email') ?? ''
   const { verifyOtp, sendPasswordResetOtp } = useAuth()
+  const { t } = useTranslation()
 
   const [digits, setDigits] = useState<string[]>(Array(OTP_LENGTH).fill(''))
   const [serverError, setServerError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [hasError, setHasError] = useState(false)
 
-  // Resend cooldown timer (60 seconds)
   const [cooldown, setCooldown] = useState(60)
   const [canResend, setCanResend] = useState(false)
 
   const inputRefs = useRef<Array<HTMLInputElement | null>>(Array(OTP_LENGTH).fill(null))
 
-  // Start countdown on mount
   useEffect(() => {
     if (cooldown <= 0) {
       setCanResend(true)
@@ -111,14 +111,14 @@ export default function VerifyOTPPage() {
       navigate('/new-password', { replace: true })
     } catch (err: unknown) {
       const message =
-        err instanceof Error ? err.message : 'Código inválido. Tente novamente.'
+        err instanceof Error ? err.message : t('auth.verifyOTP.invalidCode')
       setHasError(true)
       setServerError(
         message.toLowerCase().includes('token') ||
           message.toLowerCase().includes('otp') ||
           message.toLowerCase().includes('expired') ||
           message.toLowerCase().includes('invalid')
-          ? 'Código inválido ou expirado. Solicite um novo código.'
+          ? t('auth.verifyOTP.expiredCode')
           : message,
       )
     } finally {
@@ -137,7 +137,6 @@ export default function VerifyOTPPage() {
       setHasError(false)
       focusAt(0)
 
-      // Restart countdown
       const timer = setInterval(() => {
         setCooldown((prev) => {
           if (prev <= 1) {
@@ -176,7 +175,7 @@ export default function VerifyOTPPage() {
             <path d="M19 12H5" />
             <path d="M12 19l-7-7 7-7" />
           </svg>
-          Voltar
+          {t('common.back')}
         </Link>
 
         {/* Header */}
@@ -199,14 +198,14 @@ export default function VerifyOTPPage() {
 
           <div className="flex flex-col gap-2">
             <h1 className="text-3xl font-bold text-[hsl(var(--foreground))] tracking-tight">
-              Verificação de código
+              {t('auth.verifyOTP.title')}
             </h1>
             <p className="text-[hsl(var(--muted-foreground))] text-sm leading-relaxed">
-              Insira o código de 6 dígitos enviado para{' '}
+              {t('auth.verifyOTP.subtitle')}{' '}
               {email ? (
                 <span className="font-semibold text-[hsl(var(--foreground))]">{email}</span>
               ) : (
-                'seu e-mail'
+                t('auth.verifyOTP.yourEmail')
               )}
               .
             </p>
@@ -285,10 +284,10 @@ export default function VerifyOTPPage() {
             {isSubmitting ? (
               <>
                 <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Verificando...
+                {t('auth.verifyOTP.submitting')}
               </>
             ) : (
-              'Confirmar'
+              t('auth.verifyOTP.submit')
             )}
           </button>
         </form>
@@ -297,18 +296,18 @@ export default function VerifyOTPPage() {
         <div className="flex flex-col items-center gap-2">
           {canResend ? (
             <p className="text-sm text-[hsl(var(--muted-foreground))]">
-              Não recebeu nenhum código?{' '}
+              {t('auth.verifyOTP.noCodeReceived')}{' '}
               <button
                 type="button"
                 onClick={handleResend}
                 className="font-bold text-[hsl(var(--foreground))] hover:text-[hsl(var(--primary))] transition-colors"
               >
-                Enviar novamente
+                {t('auth.verifyOTP.resend')}
               </button>
             </p>
           ) : (
             <p className="text-sm text-[hsl(var(--muted-foreground))]">
-              Solicite novo código em{' '}
+              {t('auth.verifyOTP.resendTimer')}{' '}
               <span className="font-semibold text-[hsl(var(--foreground))] tabular-nums underline">
                 {formatCooldown(cooldown)}
               </span>
