@@ -106,7 +106,7 @@ function Avatar({
 
 export default function ConversationsPage() {
   const navigate = useNavigate()
-  const user = useAuthStore((s) => s.user)
+  const user = useAuthStore((s) => s.profile)
   const { t } = useTranslation()
   const [search, setSearch] = useState('')
   const [isSearchOpen, setIsSearchOpen] = useState(false)

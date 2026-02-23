@@ -77,6 +77,7 @@ export interface Creator {
   curtiu: boolean
   notificacoes: Notifications | null
   favorito: boolean
+  whatsapp: string | null
 }
 
 // ─── Profile (database row) ───────────────────────────────────────────────────

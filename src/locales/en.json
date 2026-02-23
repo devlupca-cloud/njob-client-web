@@ -37,8 +37,16 @@
   "guest": {
     "title": "Create your account",
     "description": "To perform this action, you need to create an account. It's quick and free!",
+    "chooseOption": "choose an option",
     "register": "Sign up",
-    "cancel": "Cancel"
+    "registerHint": "It's quick and free",
+    "login": "Sign in",
+    "loginHint": "I already have an account",
+    "loginTitle": "Welcome back",
+    "loginSubtitle": "Sign in to your account to continue",
+    "noAccount": "Don't have an account?",
+    "alreadyHaveAccount": "Already have an account?",
+    "cancel": "Continue browsing"
   },
 
   "auth": {
@@ -267,7 +275,13 @@
     "block": "Block",
     "shareProfile": "Share profile",
     "seeAllContent": "See all content",
-    "checkoutError": "Failed to create checkout. Please try again."
+    "checkoutError": "Failed to create checkout. Please try again.",
+    "ticketPurchased": "Ticket purchased successfully!",
+    "ticketError": "Failed to purchase ticket. Please try again.",
+    "contactWhatsapp": "Get in touch",
+    "whatsappLabel": "WhatsApp",
+    "meetingTitle": "In-person meeting",
+    "noWhatsapp": "WhatsApp not available"
   },
 
   "chat": {
@@ -456,15 +470,14 @@
   },
 
   "contentPage": {
-    "gallery": "Content gallery",
-    "filterAll": "All",
+    "gallery": "Content",
+    "tabPacks": "Packs",
     "filterPhotos": "Photos",
     "filterVideos": "Videos",
-    "filterAudios": "Audios",
+    "emptyPacks": "No packs available yet.",
     "emptyAll": "No content available yet.",
     "emptyPhotos": "No photos available.",
     "emptyVideos": "No videos available.",
-    "emptyAudios": "No audios available.",
     "loadError": "Error loading content. Please try again.",
     "purchaseTitle": "Content Purchase",
     "info": "Info",

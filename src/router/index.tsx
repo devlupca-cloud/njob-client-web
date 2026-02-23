@@ -1,47 +1,48 @@
-import { lazy, Suspense } from 'react'
+import { useEffect } from 'react'
 import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import { GuestModalProvider } from '@/components/ui/GuestModal'
+import { RouteErrorFallback } from '@/components/layout/ErrorBoundary'
 import { Loader2 } from 'lucide-react'
 
-// Layout (keep static — always needed)
+// Layout
 import AppShell from '@/components/layout/AppShell'
 
-// Auth pages (lazy)
-const LoginPage = lazy(() => import('@/pages/auth/LoginPage'))
-const RegisterPage = lazy(() => import('@/pages/auth/RegisterPage'))
-const ForgotPasswordPage = lazy(() => import('@/pages/auth/ForgotPasswordPage'))
-const VerifyOTPPage = lazy(() => import('@/pages/auth/VerifyOTPPage'))
-const NewPasswordPage = lazy(() => import('@/pages/auth/NewPasswordPage'))
+// Auth pages
+import LoginPage from '@/pages/auth/LoginPage'
+import RegisterPage from '@/pages/auth/RegisterPage'
+import ForgotPasswordPage from '@/pages/auth/ForgotPasswordPage'
+import VerifyOTPPage from '@/pages/auth/VerifyOTPPage'
+import NewPasswordPage from '@/pages/auth/NewPasswordPage'
 
-// App pages (lazy)
-const HomePage = lazy(() => import('@/pages/home/HomePage'))
-const ProfilePage = lazy(() => import('@/pages/profile/ProfilePage'))
-const PersonalInfoPage = lazy(() => import('@/pages/profile/PersonalInfoPage'))
-const ChangeNamePage = lazy(() => import('@/pages/profile/ChangeNamePage'))
-const ChangeEmailPage = lazy(() => import('@/pages/profile/ChangeEmailPage'))
-const ChangePasswordPage = lazy(() => import('@/pages/profile/ChangePasswordPage'))
-const ChangeLanguagePage = lazy(() => import('@/pages/profile/ChangeLanguagePage'))
-const ConversationsPage = lazy(() => import('@/pages/chat/ConversationsPage'))
-const ChatPage = lazy(() => import('@/pages/chat/ChatPage'))
-const CouponsPage = lazy(() => import('@/pages/coupons/CouponsPage'))
-const CouponDetailPage = lazy(() => import('@/pages/coupons/CouponDetailPage'))
-const SubscriptionPage = lazy(() => import('@/pages/subscription/SubscriptionPage'))
-const SavedCardsPage = lazy(() => import('@/pages/payments/SavedCardsPage'))
-const CardDetailPage = lazy(() => import('@/pages/payments/CardDetailPage'))
-const AddCardPage = lazy(() => import('@/pages/payments/AddCardPage'))
-const FinancialPage = lazy(() => import('@/pages/financial/FinancialPage'))
-const CreatorProfilePage = lazy(() => import('@/pages/creator/CreatorProfilePage'))
-const ContentPage = lazy(() => import('@/pages/creator/ContentPage'))
-const LivePage = lazy(() => import('@/pages/creator/LivePage'))
-const NewCallPage = lazy(() => import('@/pages/creator/NewCallPage'))
-const CallRoomPage = lazy(() => import('@/pages/creator/CallRoomPage'))
-const CheckoutPage = lazy(() => import('@/pages/payments/CheckoutPage'))
-const PurchasesPage = lazy(() => import('@/pages/purchases/PurchasesPage'))
-const NotificationsPage = lazy(() => import('@/pages/notifications/NotificationsPage'))
-const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'))
+// App pages
+import HomePage from '@/pages/home/HomePage'
+import ProfilePage from '@/pages/profile/ProfilePage'
+import PersonalInfoPage from '@/pages/profile/PersonalInfoPage'
+import ChangeNamePage from '@/pages/profile/ChangeNamePage'
+import ChangeEmailPage from '@/pages/profile/ChangeEmailPage'
+import ChangePasswordPage from '@/pages/profile/ChangePasswordPage'
+import ChangeLanguagePage from '@/pages/profile/ChangeLanguagePage'
+import ConversationsPage from '@/pages/chat/ConversationsPage'
+import ChatPage from '@/pages/chat/ChatPage'
+import CouponsPage from '@/pages/coupons/CouponsPage'
+import CouponDetailPage from '@/pages/coupons/CouponDetailPage'
+import SubscriptionPage from '@/pages/subscription/SubscriptionPage'
+import SavedCardsPage from '@/pages/payments/SavedCardsPage'
+import CardDetailPage from '@/pages/payments/CardDetailPage'
+import AddCardPage from '@/pages/payments/AddCardPage'
+import FinancialPage from '@/pages/financial/FinancialPage'
+import CreatorProfilePage from '@/pages/creator/CreatorProfilePage'
+import ContentPage from '@/pages/creator/ContentPage'
+import LivePage from '@/pages/creator/LivePage'
+import NewCallPage from '@/pages/creator/NewCallPage'
+import CallRoomPage from '@/pages/creator/CallRoomPage'
+import CheckoutPage from '@/pages/payments/CheckoutPage'
+import PurchasesPage from '@/pages/purchases/PurchasesPage'
+import NotificationsPage from '@/pages/notifications/NotificationsPage'
+import NotFoundPage from '@/pages/NotFoundPage'
 
-/** Full-screen loading spinner shown while auth resolves or chunks load */
+/** Full-screen loading spinner shown while auth resolves */
 function PageLoader() {
   return (
     <div className="flex items-center justify-center min-h-screen bg-[hsl(var(--background))]">
@@ -54,30 +55,33 @@ function PageLoader() {
 function RootLayout() {
   return (
     <GuestModalProvider>
-      <Suspense fallback={<PageLoader />}>
-        <Outlet />
-      </Suspense>
+      <Outlet />
     </GuestModalProvider>
   )
 }
 
-/** Allows access if user has a session OR is a guest */
+/** Allows access always — unauthenticated users are auto-set as guests */
 function AuthGuard() {
   const isLoading = useAuthStore((s) => s.isLoading)
   const session = useAuthStore((s) => s.session)
   const isGuest = useAuthStore((s) => s.isGuest)
+
+  useEffect(() => {
+    if (!isLoading && !session && !isGuest) {
+      useAuthStore.getState().setGuest(true)
+    }
+  }, [isLoading, session, isGuest])
+
   if (isLoading) return <PageLoader />
-  if (!session && !isGuest) return <Navigate to="/login" replace />
   return <Outlet />
 }
 
-/** Redirects authenticated users and guests away from login/forgot-password */
+/** Redirects authenticated users away from login/forgot-password (guests can access) */
 function GuestGuard() {
   const isLoading = useAuthStore((s) => s.isLoading)
   const session = useAuthStore((s) => s.session)
-  const isGuest = useAuthStore((s) => s.isGuest)
   if (isLoading) return <PageLoader />
-  if (session || isGuest) return <Navigate to="/home" replace />
+  if (session) return <Navigate to="/home" replace />
   return <Outlet />
 }
 
@@ -93,6 +97,7 @@ function RegisterGuard() {
 export const router = createBrowserRouter([
   {
     element: <RootLayout />,
+    errorElement: <RouteErrorFallback />,
     children: [
       {
         path: '/',

@@ -51,6 +51,7 @@ CREATE POLICY "pack_purchases_select_creator" ON pack_purchases FOR SELECT USING
 DROP POLICY IF EXISTS "all_access" ON live_stream_tickets;
 CREATE POLICY "live_tickets_select_buyer" ON live_stream_tickets FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "live_tickets_select_creator" ON live_stream_tickets FOR SELECT USING (EXISTS (SELECT 1 FROM live_streams WHERE live_streams.id = live_stream_tickets.live_stream_id AND live_streams.creator_id = auth.uid()));
+CREATE POLICY "live_tickets_insert_own" ON live_stream_tickets FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 -- ─── TABELAS PÚBLICAS (leitura aberta, escrita restrita) ────────────────────
 

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft,
   Video,
@@ -11,7 +11,6 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
-import { APP_URL } from '@/lib/config'
 import { formatCurrency } from '@/lib/utils'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -142,6 +141,7 @@ export default function NewCallPage() {
   const [searchParams] = useSearchParams()
   const creatorId = searchParams.get('creatorId')
   const { user } = useAuthStore()
+  const queryClient = useQueryClient()
 
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlot | null>(null)
@@ -164,33 +164,58 @@ export default function NewCallPage() {
     : 0
 
   const handleCheckout = async () => {
-    if (!selectedSlot || !creatorId || !user?.id) return
+    if (!user?.id || !creatorId || !selectedSlot || !selectedDate) return
 
     setIsCheckingOut(true)
     setError(null)
 
     try {
-      const { data: checkoutData, error: checkoutError } = await supabase.functions.invoke(
-        'create-stripe-checkout',
-        {
-          body: {
-            creator_id: creatorId,
-            product_id: selectedSlot.id,
-            product_type: 'video-call',
-            duration,
-            success_url: `${APP_URL}/purchases`,
-            cancel_url: `${APP_URL}/calls/new?creatorId=${creatorId}`,
-          },
-        }
-      )
+      // 1. Mark slot as purchased atomically (prevent race condition)
+      const { data: updatedSlot, error: slotError } = await supabase
+        .from('creator_availability_slots')
+        .update({ purchased: true })
+        .eq('id', selectedSlot.id)
+        .eq('purchased', false)
+        .select('id')
+        .single()
 
-      if (checkoutError) throw checkoutError
-      if (checkoutData?.checkoutUrl) {
-        window.location.href = checkoutData.checkoutUrl
+      if (slotError || !updatedSlot) {
+        // Slot already purchased by someone else
+        queryClient.invalidateQueries({ queryKey: ['call-availability', creatorId] })
+        setSelectedSlot(null)
+        setError('Este horário já foi reservado. Selecione outro.')
+        setIsCheckingOut(false)
+        return
       }
-    } catch (err: any) {
-      console.error('Checkout error:', err)
-      setError('Erro ao iniciar pagamento. Tente novamente.')
+
+      // 2. Insert one_on_one_calls
+      const { error: callError } = await supabase
+        .from('one_on_one_calls')
+        .insert({
+          user_id: user.id,
+          creator_id: creatorId,
+          availability_slot_id: selectedSlot.id,
+          scheduled_start_time: `${selectedDate}T${selectedSlot.slot_time}`,
+          scheduled_duration_minutes: duration,
+          call_price: price,
+          currency: 'BRL',
+          status: 'confirmed',
+        })
+
+      if (callError) {
+        // Rollback: unmark slot
+        await supabase
+          .from('creator_availability_slots')
+          .update({ purchased: false })
+          .eq('id', selectedSlot.id)
+        throw callError
+      }
+
+      // 3. Success → navigate to purchases
+      navigate('/purchases')
+    } catch (err) {
+      console.error('[NewCallPage] Checkout error:', err)
+      setError('Erro ao agendar chamada. Tente novamente.')
     } finally {
       setIsCheckingOut(false)
     }

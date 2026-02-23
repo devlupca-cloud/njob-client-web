@@ -94,7 +94,7 @@ export default function CardCreator({ creator }: CardCreatorProps) {
     faz_chamada_video,
     faz_encontro_presencial,
     quantidade_likes,
-    favorito,
+    curtiu,
   } = creator
 
   const isLive = status === 'em live'
@@ -103,10 +103,10 @@ export default function CardCreator({ creator }: CardCreatorProps) {
     navigate(`/creator/${id}`)
   }
 
-  const favoriteMutation = useMutation({
+  const likeMutation = useMutation({
     mutationFn: async () => {
       if (!currentUser?.id) return
-      const { error } = await supabase.rpc('toggle_creator_favorite', {
+      const { error } = await supabase.rpc('toggle_creator_like', {
         p_creator_id: id,
       })
       if (error) throw error
@@ -117,9 +117,9 @@ export default function CardCreator({ creator }: CardCreatorProps) {
     },
   })
 
-  const handleFavorite = (e: React.MouseEvent) => {
+  const handleLike = (e: React.MouseEvent) => {
     e.stopPropagation()
-    favoriteMutation.mutate()
+    likeMutation.mutate()
   }
 
   return (
@@ -163,16 +163,16 @@ export default function CardCreator({ creator }: CardCreatorProps) {
           </span>
         )}
 
-        {/* Favorite button */}
+        {/* Like button */}
         <button
-          onClick={handleFavorite}
+          onClick={handleLike}
           className="absolute top-1.5 right-1.5 w-6 h-6 flex items-center justify-center rounded-full bg-black/40 backdrop-blur-sm"
-          aria-label={favorito ? t('card.removeFavorite') : t('card.addFavorite')}
+          aria-label={curtiu ? t('card.removeFavorite') : t('card.addFavorite')}
         >
           <Heart
             size={13}
             className={
-              favorito
+              curtiu
                 ? 'fill-rose-500 text-rose-500'
                 : 'text-white'
             }

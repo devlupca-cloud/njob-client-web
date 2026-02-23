@@ -4,7 +4,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Check, Star, Zap, Crown, Settings } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
-import { APP_URL } from '@/lib/config'
 import { formatDate } from '@/lib/utils'
 import { useToast } from '@/components/ui/Toast'
 import type { SubscriptionPlan, CreatorSubscription } from '@/types'
@@ -213,7 +212,7 @@ function ActiveSubscriptionCard({
 export default function SubscriptionPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
-  const user = useAuthStore((s) => s.user)
+  const user = useAuthStore((s) => s.profile)
   const queryClient = useQueryClient()
   const { t } = useTranslation()
   const { toast } = useToast()
@@ -250,43 +249,14 @@ export default function SubscriptionPage() {
   // Índice do plano mais popular (o do meio, ou o mais caro se 2)
   const popularIndex = plans.length >= 2 ? Math.floor(plans.length / 2) : -1
 
-  async function handleSubscribe(plan: SubscriptionPlan) {
-    try {
-      const { data, error } = await supabase.functions.invoke('create-checkout-subscription-stripe', {
-        body: {
-          price_id: plan.stripe_price_id,
-          success_url: `${APP_URL}/subscription?session_id={CHECKOUT_SESSION_ID}`,
-          cancel_url: `${APP_URL}/subscription?canceled=true`,
-        },
-      })
-      if (error) throw error
-      if (data?.checkout_url) {
-        window.location.href = data.checkout_url
-      }
-    } catch (err) {
-      console.error('Checkout error:', err)
-      toast({ title: t('subscription.checkoutError'), type: 'error' })
-    }
+  // STRIPE_DISABLED: Subscription checkout temporarily disabled
+  async function handleSubscribe(_plan: SubscriptionPlan) {
+    toast({ title: t('payments.addCard.comingSoon'), type: 'info' })
   }
 
+  // STRIPE_DISABLED: Customer portal temporarily disabled
   async function handleManageSubscription() {
-    setIsManaging(true)
-    try {
-      const { data, error } = await supabase.functions.invoke('create-customer-portal-session', {
-        body: {
-          return_url: `${APP_URL}/subscription`,
-        },
-      })
-      if (error) throw error
-      if (data?.portal_url) {
-        window.location.href = data.portal_url
-      }
-    } catch (err) {
-      console.error('Portal error:', err)
-      toast({ title: t('subscription.portalError'), type: 'error' })
-    } finally {
-      setIsManaging(false)
-    }
+    toast({ title: t('payments.addCard.comingSoon'), type: 'info' })
   }
 
   return (

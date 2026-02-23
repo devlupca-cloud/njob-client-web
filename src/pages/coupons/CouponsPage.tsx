@@ -142,7 +142,7 @@ function SkeletonCard() {
 export default function CouponsPage() {
   const navigate = useNavigate()
   const { t } = useTranslation()
-  const user = useAuthStore((s) => s.user)
+  const user = useAuthStore((s) => s.profile)
 
   const { data: coupons, isLoading, isError } = useQuery({
     queryKey: ['available-coupons'],

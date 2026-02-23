@@ -37,8 +37,16 @@
   "guest": {
     "title": "Crea tu cuenta",
     "description": "Para realizar esta acción, necesitas crear una cuenta. ¡Es rápido y gratuito!",
+    "chooseOption": "elige una opción",
     "register": "Registrarse",
-    "cancel": "Cancelar"
+    "registerHint": "Es rápido y gratuito",
+    "login": "Iniciar sesión",
+    "loginHint": "Ya tengo una cuenta",
+    "loginTitle": "Bienvenido de nuevo",
+    "loginSubtitle": "Inicia sesión para continuar",
+    "noAccount": "¿No tienes cuenta?",
+    "alreadyHaveAccount": "¿Ya tienes cuenta?",
+    "cancel": "Seguir navegando"
   },
 
   "auth": {
@@ -267,7 +275,13 @@
     "block": "Bloquear",
     "shareProfile": "Compartir perfil",
     "seeAllContent": "Ver todo el contenido",
-    "checkoutError": "Error al crear checkout. Inténtalo de nuevo."
+    "checkoutError": "Error al crear checkout. Inténtalo de nuevo.",
+    "ticketPurchased": "¡Entrada adquirida con éxito!",
+    "ticketError": "Error al comprar entrada. Inténtalo de nuevo.",
+    "contactWhatsapp": "Contactar",
+    "whatsappLabel": "WhatsApp",
+    "meetingTitle": "Encuentro presencial",
+    "noWhatsapp": "WhatsApp no disponible"
   },
 
   "chat": {
@@ -456,15 +470,14 @@
   },
 
   "contentPage": {
-    "gallery": "Galería de contenido",
-    "filterAll": "Todos",
+    "gallery": "Contenido",
+    "tabPacks": "Paquetes",
     "filterPhotos": "Fotos",
     "filterVideos": "Videos",
-    "filterAudios": "Audios",
+    "emptyPacks": "No hay paquetes disponibles aún.",
     "emptyAll": "No hay contenido disponible aún.",
     "emptyPhotos": "No hay fotos disponibles.",
     "emptyVideos": "No hay videos disponibles.",
-    "emptyAudios": "No hay audios disponibles.",
     "loadError": "Error al cargar contenido. Inténtalo de nuevo.",
     "purchaseTitle": "Compra de Contenido",
     "info": "Información",

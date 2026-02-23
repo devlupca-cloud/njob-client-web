@@ -1,8 +1,9 @@
 import { useState, useMemo, useDeferredValue } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { Search, Users } from 'lucide-react'
 import Logo from '@/components/ui/Logo'
 import { supabase } from '@/lib/supabase'
+import { useAuthStore } from '@/store/authStore'
 import type { Creator } from '@/types'
 import CardCreator, { CardCreatorSkeleton } from '@/components/cards/CardCreator'
 import { useTranslation } from 'react-i18next'
@@ -27,12 +28,28 @@ type FilterKey = 'todos' | 'online' | 'lives' | 'conteudo' | 'presencial' | 'mul
 
 // ─── Fetch ────────────────────────────────────────────────────────────────────
 
-async function fetchCreators(): Promise<Creator[]> {
-  // Buscar RPC e is_active em paralelo
-  const [rpcRes, profilesRes] = await Promise.all([
-    supabase.rpc('get_creators_status'),
-    supabase.from('profiles').select('id, is_active').eq('role', 'creator'),
+/** Timeout wrapper — rejects if the promise takes longer than `ms` */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Request timeout')), ms),
+    ),
   ])
+}
+
+async function fetchCreators(userId?: string): Promise<Creator[]> {
+  // Buscar RPC, is_active e likes do usuário em paralelo (15s timeout)
+  const [rpcRes, profilesRes, likesRes] = await withTimeout(
+    Promise.all([
+      supabase.rpc('get_creators_status'),
+      supabase.from('profiles').select('id, is_active').eq('role', 'creator'),
+      userId
+        ? supabase.from('content_likes').select('creator_id').eq('client_id', userId)
+        : Promise.resolve({ data: [] as { creator_id: string }[], error: null }),
+    ]),
+    15000,
+  )
 
   if (rpcRes.error) throw rpcRes.error
   const rows = rpcRes.data ?? []
@@ -41,6 +58,8 @@ async function fetchCreators(): Promise<Creator[]> {
   for (const p of profilesRes.data ?? []) {
     activeMap.set(p.id, p.is_active ?? false)
   }
+
+  const likedIds = new Set((likesRes.data ?? []).map((l) => l.creator_id))
 
   return rows.map((row: CreatorFromRPC): Creator => {
     // Se a RPC diz "em live", manter; senão usar is_active do profiles
@@ -70,7 +89,7 @@ async function fetchCreators(): Promise<Creator[]> {
       imagens: [],
       documents: [],
       proxima_live: null,
-      curtiu: false,
+      curtiu: likedIds.has(row.id),
       notificacoes: null,
       favorito: false,
     }
@@ -155,6 +174,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export default function HomePage() {
   const { t } = useTranslation()
+  const currentUser = useAuthStore((s) => s.profile)
   const [search, setSearch] = useState('')
   const deferredSearch = useDeferredValue(search)
   const [activeFilter, setActiveFilter] = useState<FilterKey>('todos')
@@ -171,8 +191,9 @@ export default function HomePage() {
 
   const { data: creators, isLoading, isError } = useQuery({
     queryKey: ['creators'],
-    queryFn: fetchCreators,
+    queryFn: () => fetchCreators(currentUser?.id),
     staleTime: 1000 * 60 * 2,
+    placeholderData: keepPreviousData,
   })
 
   const sections = useMemo(() => {

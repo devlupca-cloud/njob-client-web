@@ -7,6 +7,7 @@ import './index.css'
 import { router } from './router'
 import { ToastProvider } from '@/components/ui/Toast'
 import AuthProvider from '@/components/layout/AuthProvider'
+import { GlobalErrorBoundary } from '@/components/layout/ErrorBoundary'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -22,12 +23,14 @@ const queryClient = new QueryClient({
 // Render React immediately — auth is resolved inside AuthProvider
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <ToastProvider>
-        <AuthProvider>
-          <RouterProvider router={router} />
-        </AuthProvider>
-      </ToastProvider>
-    </QueryClientProvider>
+    <GlobalErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <ToastProvider>
+          <AuthProvider>
+            <RouterProvider router={router} />
+          </AuthProvider>
+        </ToastProvider>
+      </QueryClientProvider>
+    </GlobalErrorBoundary>
   </StrictMode>,
 )

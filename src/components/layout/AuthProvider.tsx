@@ -13,49 +13,42 @@ async function fetchProfile(userId: string) {
 }
 
 /**
- * Resolves auth on mount. Uses getSession() with a race timeout to avoid hangs.
- * Listens for subsequent auth changes via onAuthStateChange.
+ * Resolves auth on mount using onAuthStateChange (INITIAL_SESSION event).
+ * This avoids the getSession() + Web Locks anti-pattern that can cause
+ * Supabase client hangs on subsequent API calls.
  */
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let mounted = true
 
-    async function init() {
-      try {
-        // Race getSession against a 3s timeout to avoid Web Locks hang
-        const result = await Promise.race([
-          supabase.auth.getSession(),
-          new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
-        ])
-
-        if (!mounted) return
-
-        const session = result?.data?.session ?? null
-        useAuthStore.getState().setSession(session)
-
-        // Fetch profile in background — don't block loading state
-        if (session?.user) {
-          fetchProfile(session.user.id)
-            .then((profile) => {
-              if (mounted) useAuthStore.getState().setProfile(profile)
-            })
-            .catch(() => {})
-        }
-      } catch (err) {
-        console.error('Auth init error:', err)
-      } finally {
-        useAuthStore.getState().setLoading(false)
-      }
-    }
-
-    init()
-
-    // Listen for subsequent auth changes (login, logout, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if (event === 'INITIAL_SESSION') return
+        if (!mounted) return
 
         const store = useAuthStore.getState()
+
+        if (event === 'INITIAL_SESSION') {
+          // First session resolution — set auth state and stop loading
+          store.setSession(session)
+
+          if (session?.user) {
+            fetchProfile(session.user.id)
+              .then((profile) => {
+                if (mounted) useAuthStore.getState().setProfile(profile)
+              })
+              .catch(() => {})
+          }
+
+          store.setLoading(false)
+          return
+        }
+
+        if (event === 'SIGNED_OUT') {
+          store.clear()
+          return
+        }
+
+        // TOKEN_REFRESHED, SIGNED_IN, etc.
         store.setSession(session)
 
         if (session?.user) {
@@ -63,14 +56,22 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
             const profile = await fetchProfile(session.user.id)
             if (mounted) useAuthStore.getState().setProfile(profile)
           } catch {}
-        } else if (event === 'SIGNED_OUT') {
-          store.clear()
         }
       }
     )
 
+    // Safety timeout: if INITIAL_SESSION never fires (edge case), stop loading
+    const timeout = setTimeout(() => {
+      const store = useAuthStore.getState()
+      if (store.isLoading) {
+        console.warn('[AuthProvider] INITIAL_SESSION timeout — forcing loading=false')
+        store.setLoading(false)
+      }
+    }, 3000)
+
     return () => {
       mounted = false
+      clearTimeout(timeout)
       subscription.unsubscribe()
     }
   }, [])

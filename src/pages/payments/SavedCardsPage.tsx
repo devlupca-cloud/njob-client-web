@@ -150,7 +150,7 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
 export default function SavedCardsPage() {
   const navigate = useNavigate()
   const { t } = useTranslation()
-  const user = useAuthStore((s) => s.user)
+  const user = useAuthStore((s) => s.profile)
   const queryClient = useQueryClient()
 
   const { data: cards, isLoading, isError } = useQuery({

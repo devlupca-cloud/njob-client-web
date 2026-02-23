@@ -8,9 +8,8 @@ const corsHeaders = {
 };
 
 /**
- * Generates a ZegoCloud Token04 using HMAC-SHA256.
- * This is the server-side equivalent of the token generation
- * that was previously exposed on the client via generateKitTokenForTest.
+ * Generates a ZegoCloud Token04 using AES-CBC encryption.
+ * Matches the exact format from ZegoCloud's official SDK (generateKitTokenForTest).
  */
 async function generateToken04(
   appId: number,
@@ -18,46 +17,69 @@ async function generateToken04(
   userId: string,
   effectiveTimeInSeconds = 7200
 ) {
-  const createTime = Math.floor(Date.now() / 1000);
-  const expireTime = createTime + effectiveTimeInSeconds;
+  const now = Math.floor(Date.now() / 1000);
+  const expire = now + effectiveTimeInSeconds;
+
+  // Payload must use exact field names the ZegoCloud server expects
   const payloadObject = {
     app_id: appId,
     user_id: userId,
-    nonce: crypto.getRandomValues(new Uint32Array(1))[0],
-    create_time: createTime,
-    expire_time: expireTime,
+    nonce: (2147483647 * Math.random()) | 0,
+    ctime: now,
+    expire: expire,
   };
 
   const payload = JSON.stringify(payloadObject);
 
+  // Generate a 16-char random digit string as IV (matches SDK behaviour)
+  let ivStr = Math.random().toString().substring(2, 18);
+  if (ivStr.length < 16) ivStr += ivStr.substring(0, 16 - ivStr.length);
+  const ivBytes = new TextEncoder().encode(ivStr); // 16 ASCII bytes
+
+  // Import server secret as AES-CBC key
+  const keyBytes = new TextEncoder().encode(serverSecret);
   const key = await crypto.subtle.importKey(
     "raw",
-    new TextEncoder().encode(serverSecret),
-    { name: "HMAC", hash: "SHA-256" },
+    keyBytes,
+    { name: "AES-CBC" },
     false,
-    ["sign"]
+    ["encrypt"]
   );
-  const signature = await crypto.subtle.sign(
-    "HMAC",
+
+  // AES-CBC encrypt (Web Crypto adds PKCS7 padding automatically)
+  const encrypted = await crypto.subtle.encrypt(
+    { name: "AES-CBC", iv: ivBytes },
     key,
     new TextEncoder().encode(payload)
   );
-  const signatureBytes = new Uint8Array(signature);
+  const encryptedBytes = new Uint8Array(encrypted);
 
-  const tokenInfo = new Uint8Array(
-    12 + 2 + signatureBytes.length + 2 + payload.length
-  );
-  const dv = new DataView(tokenInfo.buffer);
-  dv.setBigInt64(0, BigInt(expireTime), false);
-  dv.setInt16(8, signatureBytes.length, false);
-  tokenInfo.set(signatureBytes, 12);
-  dv.setInt16(12 + signatureBytes.length, payload.length, false);
-  tokenInfo.set(
-    new TextEncoder().encode(payload),
-    12 + signatureBytes.length + 2
-  );
+  // Pack binary token — exact same layout as the official SDK:
+  // [0,0,0,0](4) + expire_be32(4) + iv_len(2) + iv(16) + enc_len(2) + enc(N)
+  const tokenInfo = new Uint8Array(28 + encryptedBytes.length);
 
-  const base64Token = btoa(String.fromCharCode(...tokenInfo));
+  // Bytes 0-3: zero padding
+  tokenInfo.set([0, 0, 0, 0], 0);
+
+  // Bytes 4-7: expire as 32-bit big-endian
+  const expBuf = new Uint8Array(new Int32Array([expire]).buffer).reverse();
+  tokenInfo.set(expBuf, 4);
+
+  // Bytes 8-9: IV length as 16-bit big-endian
+  tokenInfo[8] = ivBytes.length >> 8;
+  tokenInfo[9] = ivBytes.length & 0xff;
+
+  // Bytes 10-25: IV (16 bytes)
+  tokenInfo.set(ivBytes, 10);
+
+  // Bytes 26-27: encrypted length as 16-bit big-endian
+  tokenInfo[26] = encryptedBytes.length >> 8;
+  tokenInfo[27] = encryptedBytes.length & 0xff;
+
+  // Bytes 28+: encrypted data
+  tokenInfo.set(encryptedBytes, 28);
+
+  const base64Token = btoa(String.fromCharCode(...Array.from(tokenInfo)));
   return `04${base64Token}`;
 }
 
@@ -71,15 +93,13 @@ function buildKitToken(
   userID: string,
   userName: string
 ): string {
-  const kitToken = {
-    ver: 1,
-    token: token04,
-    app_id: appId,
-    user_id: userID,
-    user_name: userName,
-    room_id: roomID,
+  const payload = {
+    appID: appId,
+    userID: userID,
+    userName: encodeURIComponent(userName),
+    roomID: roomID,
   };
-  return btoa(JSON.stringify(kitToken));
+  return token04 + "#" + btoa(JSON.stringify(payload));
 }
 
 serve(async (req) => {

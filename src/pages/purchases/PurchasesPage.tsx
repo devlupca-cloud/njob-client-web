@@ -344,7 +344,7 @@ function CallList({ calls, onTap }: { calls: CallPurchase[]; onTap: (callId: str
 export default function PurchasesPage() {
   const navigate = useNavigate()
   const { t } = useTranslation()
-  const user = useAuthStore((s) => s.user)
+  const user = useAuthStore((s) => s.profile)
   const [activeTab, setActiveTab] = useState<Tab>('packs')
 
   const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [

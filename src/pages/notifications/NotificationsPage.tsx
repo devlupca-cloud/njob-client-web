@@ -241,7 +241,7 @@ export default function NotificationsPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { toast } = useToast()
-  const userId = useAuthStore((s) => s.user?.id)
+  const userId = useAuthStore((s) => s.profile?.id)
 
   const [filter, setFilter] = useState<FilterTab>('all')
 

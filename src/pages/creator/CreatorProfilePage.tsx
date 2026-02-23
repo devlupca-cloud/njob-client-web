@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import {
   ArrowLeft,
@@ -20,9 +20,9 @@ import {
   Users,
   Ticket,
   DollarSign,
+  Loader2,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { APP_URL } from '@/lib/config'
 import { useAuthStore } from '@/store/authStore'
 import { useGuestGuard } from '@/components/ui/GuestModal'
 import { useToast } from '@/components/ui/Toast'
@@ -145,7 +145,7 @@ async function fetchCreatorProfile(
       : Promise.resolve({ count: 0, data: null, error: null }),
     supabase
       .from('profiles')
-      .select('is_active')
+      .select('*')
       .eq('id', profileId)
       .single(),
   ])
@@ -238,6 +238,7 @@ async function fetchCreatorProfile(
     curtiu: d.curtiu ?? false,
     notificacoes: null,
     favorito: d.favorito ?? false,
+    whatsapp: (profileRes.data as Record<string, unknown>)?.whatsapp as string | null ?? null,
   }
 
   return { creator, packs, lives, subscribersCount: subscribersCount ?? 0, isSubscribed }
@@ -250,11 +251,13 @@ function LiveInfoModal({
   creatorName,
   onClose,
   onEnter,
+  isLoading,
 }: {
   live: LiveStream
   creatorName: string
   onClose: () => void
   onEnter: () => void
+  isLoading?: boolean
 }) {
   const { t } = useTranslation()
 
@@ -305,13 +308,19 @@ function LiveInfoModal({
 
         <button
           onClick={onEnter}
+          disabled={isLoading}
           className="
             w-full flex items-center justify-center gap-2 py-3 rounded-xl
             bg-[hsl(var(--primary))] text-white font-semibold text-sm
             hover:opacity-90 active:scale-[0.98] transition-all duration-150
+            disabled:opacity-60 disabled:cursor-not-allowed
           "
         >
-          <Ticket size={18} />
+          {isLoading ? (
+            <Loader2 size={18} className="animate-spin" />
+          ) : (
+            <Ticket size={18} />
+          )}
           {live.status === 'live' ? t('creator.joinLive') : t('creator.buyTicket')}
         </button>
       </div>
@@ -448,6 +457,116 @@ function PackModal({
   )
 }
 
+// ─── Meeting Modal ────────────────────────────────────────────────────────────
+
+function MeetingModal({
+  whatsapp,
+  valor1Hora,
+  valor30Min,
+  onClose,
+}: {
+  whatsapp: string | null
+  valor1Hora: number
+  valor30Min: number
+  onClose: () => void
+}) {
+  const { t } = useTranslation()
+
+  const cleanNumber = whatsapp?.replace(/\D/g, '') ?? ''
+  const waLink = cleanNumber ? `https://wa.me/${cleanNumber.startsWith('55') ? cleanNumber : `55${cleanNumber}`}` : null
+
+  const formatWhatsapp = (num: string) => {
+    const digits = num.replace(/\D/g, '')
+    if (digits.length === 11) {
+      return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`
+    }
+    if (digits.length === 13 && digits.startsWith('55')) {
+      return `+55 (${digits.slice(2, 4)}) ${digits.slice(4, 9)}-${digits.slice(9)}`
+    }
+    return num
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl bg-[hsl(var(--card))] border border-[hsl(var(--border))] p-6 max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Close */}
+        <div className="flex justify-end mb-2">
+          <button onClick={onClose} className="p-1 rounded-full hover:bg-[hsl(var(--secondary))]">
+            <X size={20} className="text-[hsl(var(--foreground))]" />
+          </button>
+        </div>
+
+        <div className="flex flex-col items-center gap-2 mb-6">
+          <div className="w-12 h-12 rounded-full bg-amber-500/12 flex items-center justify-center">
+            <MapPin size={24} className="text-amber-400" />
+          </div>
+          <h2 className="text-lg font-bold text-[hsl(var(--foreground))] text-center">
+            {t('creator.meetingTitle')}
+          </h2>
+        </div>
+
+        {whatsapp ? (
+          <>
+            <p className="text-sm font-semibold text-[hsl(var(--primary))] mb-3">{t('creator.whatsappLabel')}</p>
+            <div className="flex items-center gap-2 mb-4">
+              <Phone size={18} className="text-[hsl(var(--muted-foreground))]" />
+              <span className="text-sm text-[hsl(var(--muted-foreground))]">
+                {formatWhatsapp(whatsapp)}
+              </span>
+            </div>
+
+            {(valor1Hora > 0 || valor30Min > 0) && (
+              <div className="flex flex-col gap-2 mb-6">
+                <p className="text-sm font-semibold text-[hsl(var(--primary))]">{t('common.info')}</p>
+                {valor1Hora > 0 && (
+                  <div className="flex items-center gap-2">
+                    <DollarSign size={18} className="text-[hsl(var(--muted-foreground))]" />
+                    <span className="text-sm text-[hsl(var(--muted-foreground))]">
+                      {formatCurrency(valor1Hora)}{t('creator.perHour')}
+                    </span>
+                  </div>
+                )}
+                {valor30Min > 0 && (
+                  <div className="flex items-center gap-2">
+                    <DollarSign size={18} className="text-[hsl(var(--muted-foreground))]" />
+                    <span className="text-sm text-[hsl(var(--muted-foreground))]">
+                      {formatCurrency(valor30Min)}{t('creator.per30min')}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <a
+              href={waLink!}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="
+                w-full flex items-center justify-center gap-2 py-3 rounded-xl
+                bg-emerald-600 text-white font-semibold text-sm
+                hover:opacity-90 active:scale-[0.98] transition-all duration-150
+              "
+            >
+              <MessageCircle size={18} />
+              {t('creator.contactWhatsapp')}
+            </a>
+          </>
+        ) : (
+          <p className="text-sm text-[hsl(var(--muted-foreground))] text-center">
+            {t('creator.noWhatsapp')}
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
 
 function ProfileSkeleton() {
@@ -483,12 +602,15 @@ export default function CreatorProfilePage() {
   const [selectedPack, setSelectedPack] = useState<PackInfo | null>(null)
   const [showAllPhotos, setShowAllPhotos] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
+  const [isBuyingTicket, setIsBuyingTicket] = useState(false)
+  const [showMeetingModal, setShowMeetingModal] = useState(false)
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['creator-profile', profileId, currentUser?.id],
+    queryKey: ['creator-profile', profileId],
     queryFn: () => fetchCreatorProfile(profileId!, currentUser?.id),
     enabled: !!profileId,
     staleTime: 1000 * 60 * 2,
+    placeholderData: keepPreviousData,
   })
 
   // Track profile visit exactly once per mount
@@ -565,36 +687,10 @@ export default function CreatorProfilePage() {
     },
   })
 
+  // STRIPE_DISABLED: Subscribe mutation temporarily disabled
   const subscribeMutation = useMutation({
     mutationFn: async () => {
-      if (!currentUser?.id || !profileId) return
-
-      // Fetch the first active subscription plan to get the Stripe price ID
-      const { data: plans } = await supabase
-        .from('subscription_plans')
-        .select('stripe_price_id')
-        .eq('is_active', true)
-        .order('price_monthly', { ascending: true })
-        .limit(1)
-
-      const priceId = plans?.[0]?.stripe_price_id
-      if (!priceId) throw new Error(t('creator.noSubscriptionPlans'))
-
-      const successUrl = `${APP_URL}/creator/${profileId}`
-      const cancelUrl = `${APP_URL}/creator/${profileId}`
-
-      const { data, error } = await supabase.functions.invoke('create-checkout-subscription-stripe', {
-        body: {
-          price_id: priceId,
-          success_url: successUrl,
-          cancel_url: cancelUrl,
-        },
-      })
-
-      if (error) throw error
-      if (data?.checkout_url || data?.url) {
-        window.location.href = data.checkout_url || data.url
-      }
+      toast({ title: t('payments.addCard.comingSoon'), type: 'info' })
     },
   })
 
@@ -626,70 +722,59 @@ export default function CreatorProfilePage() {
     navigate(`/creator/${creator.id}/content`)
   }
 
-  const handleBuyPack = async (pack: PackInfo) => {
+  // STRIPE_DISABLED: Pack purchase temporarily disabled
+  const handleBuyPack = async (_pack: PackInfo) => {
     setSelectedPack(null)
-    try {
-      const { data, error } = await supabase.functions.invoke('create-stripe-checkout', {
-        body: {
-          creator_id: pack.creator_id,
-          product_id: pack.id,
-          stripe_price_id: pack.stripe_price_id,
-          product_type: 'pack',
-          success_url: `${APP_URL}/purchases`,
-          cancel_url: `${APP_URL}/creator/${pack.creator_id}`,
-        },
-      })
-      if (error) throw error
-      if (data?.checkoutUrl) {
-        window.location.href = data.checkoutUrl
-      }
-    } catch (err) {
-      console.error(t('creator.checkoutError'), err)
-    }
+    toast({ title: t('payments.addCard.comingSoon'), type: 'info' })
   }
 
   const handleEnterLive = async (live: LiveStream) => {
-    setSelectedLive(null)
-
     // Free live → enter directly
     if (!live.ticket_price) {
+      setSelectedLive(null)
       navigate(`/lives/${live.id}`)
       return
     }
 
-    // Paid live → check if user already has a ticket
-    if (currentUser?.id) {
+    if (!currentUser?.id) return
+
+    setIsBuyingTicket(true)
+    try {
+      // Check if user already has a ticket
       const { count } = await supabase
         .from('live_stream_tickets')
         .select('id', { count: 'exact', head: true })
         .eq('live_stream_id', live.id)
         .eq('user_id', currentUser.id)
-        .eq('status', 'active')
+        .eq('status', 'completed')
 
       if ((count ?? 0) > 0) {
+        setSelectedLive(null)
         navigate(`/lives/${live.id}`)
         return
       }
-    }
 
-    // No ticket → open Stripe checkout
-    try {
-      const { data, error } = await supabase.functions.invoke('create-stripe-checkout', {
-        body: {
-          creator_id: live.creator_id,
-          product_id: live.id,
-          stripe_price_id: live.stripe_price_id,
-          product_type: 'live_ticket',
-          success_url: `${APP_URL}/lives/${live.id}`,
-          cancel_url: `${APP_URL}/creator/${live.creator_id}`,
-        },
-      })
+      // Insert ticket directly (bypass Stripe)
+      const { error } = await supabase
+        .from('live_stream_tickets')
+        .insert({
+          user_id: currentUser.id,
+          live_stream_id: live.id,
+          purchase_price: live.ticket_price,
+          status: 'completed',
+          currency: 'BRL',
+        })
+
       if (error) throw error
-      if (data?.checkoutUrl) {
-        window.location.href = data.checkoutUrl
-      }
+
+      toast({ title: t('creator.ticketPurchased'), type: 'success' })
+      setSelectedLive(null)
+      navigate(`/lives/${live.id}`)
     } catch (err) {
-      console.error(t('creator.checkoutError'), err)
+      console.error('[CreatorProfile] Ticket purchase error:', err)
+      toast({ title: t('creator.ticketError'), type: 'error' })
+    } finally {
+      setIsBuyingTicket(false)
     }
   }
 
@@ -711,40 +796,6 @@ export default function CreatorProfilePage() {
           <ArrowLeft size={18} className="text-white" />
         </button>
 
-        <button
-          onClick={() => setShowMenu((p) => !p)}
-          className="w-9 h-9 flex items-center justify-center rounded-full bg-black/40 backdrop-blur-sm"
-          aria-label="Menu"
-        >
-          <MoreVertical size={18} className="text-white" />
-        </button>
-
-        {/* Dropdown menu */}
-        {showMenu && (
-          <div
-            className="absolute top-14 right-4 w-44 rounded-xl bg-[hsl(var(--card))] border border-[hsl(var(--border))] shadow-xl overflow-hidden z-30"
-            onMouseLeave={() => setShowMenu(false)}
-          >
-            <button
-              className="w-full text-left px-4 py-3 text-sm text-[hsl(var(--foreground))] hover:bg-[hsl(var(--secondary))] transition-colors"
-              onClick={() => { setShowMenu(false) }}
-            >
-              {t('creator.report')}
-            </button>
-            <button
-              className="w-full text-left px-4 py-3 text-sm text-[hsl(var(--foreground))] hover:bg-[hsl(var(--secondary))] transition-colors"
-              onClick={() => { setShowMenu(false) }}
-            >
-              {t('creator.block')}
-            </button>
-            <button
-              className="w-full text-left px-4 py-3 text-sm text-[hsl(var(--foreground))] hover:bg-[hsl(var(--secondary))] transition-colors"
-              onClick={() => { setShowMenu(false) }}
-            >
-              {t('creator.shareProfile')}
-            </button>
-          </div>
-        )}
       </div>
 
       {/* ── Banner ──────────────────────────────────────────────────────────── */}
@@ -809,32 +860,7 @@ export default function CreatorProfilePage() {
             />
           </button>
 
-          {/* Message */}
-          <button
-            onClick={() => { if (!guardGuestAction()) sendMessageMutation.mutate() }}
-            disabled={sendMessageMutation.isPending}
-            className="w-10 h-10 flex items-center justify-center rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--card))] disabled:opacity-50 disabled:cursor-not-allowed"
-            aria-label={t('creator.sendMessage')}
-          >
-            <MessageCircle size={18} className="text-[hsl(var(--muted-foreground))]" />
-          </button>
-
-          {/* Subscribe */}
-          <button
-            onClick={() => { if (!guardGuestAction() && !isSubscribed) subscribeMutation.mutate() }}
-            disabled={subscribeMutation.isPending}
-            className={`
-              flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold
-              transition-all duration-150 active:scale-[0.97]
-              ${isSubscribed
-                ? 'bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))] border border-[hsl(var(--border))]'
-                : 'bg-[hsl(var(--primary))] text-white hover:opacity-90'
-              }
-            `}
-          >
-            <Star size={15} />
-            {isSubscribed ? t('creator.subscribing') : t('creator.subscribe')}
-          </button>
+          {/* Subscribe — hidden until Stripe integration is ready */}
         </div>
       </div>
 
@@ -863,37 +889,15 @@ export default function CreatorProfilePage() {
             </span>
             <span className="text-xs text-[hsl(var(--muted-foreground))]">{t('creator.likes')}</span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <Users size={14} className="text-[hsl(var(--primary))]" />
-            <span className="text-sm font-semibold text-[hsl(var(--foreground))]">
-              {subscribersCount}
-            </span>
-            <span className="text-xs text-[hsl(var(--muted-foreground))]">{t('creator.subscribers')}</span>
-          </div>
+          {/* Subscribers count — hidden until subscriptions are enabled */}
         </div>
       </div>
 
       {/* ── Capabilities ─────────────────────────────────────────────────────── */}
-      {(creator.vende_conteudo || creator.faz_chamada_video || creator.faz_encontro_presencial) && (
+      {(creator.faz_chamada_video || creator.faz_encontro_presencial) && (
         <div className="px-4 mb-5 max-w-4xl mx-auto w-full">
           <div className="flex flex-col gap-2">
-            {creator.vende_conteudo && (
-              <button
-                onClick={() => { if (!guardGuestAction()) handleViewContent() }}
-                className="flex items-center justify-between px-4 py-3 rounded-xl bg-[hsl(var(--card))] border border-[hsl(var(--border))]"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-[hsl(var(--primary)/0.12)] flex items-center justify-center">
-                    <Package size={18} className="text-[hsl(var(--primary))]" />
-                  </div>
-                  <div className="text-left">
-                    <p className="text-sm font-medium text-[hsl(var(--foreground))]">{t('creator.sellsContent')}</p>
-                    <p className="text-xs text-[hsl(var(--muted-foreground))]">{t('creator.exclusiveContent')}</p>
-                  </div>
-                </div>
-                <ChevronRight size={16} className="text-[hsl(var(--muted-foreground))]" />
-              </button>
-            )}
+            {/* Vende conteúdo — hidden until content sales flow is ready */}
 
             {creator.faz_chamada_video && (
               <button
@@ -916,7 +920,10 @@ export default function CreatorProfilePage() {
             )}
 
             {creator.faz_encontro_presencial && (
-              <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-[hsl(var(--card))] border border-[hsl(var(--border))]">
+              <button
+                onClick={() => { if (!guardGuestAction()) setShowMeetingModal(true) }}
+                className="flex items-center justify-between px-4 py-3 rounded-xl bg-[hsl(var(--card))] border border-[hsl(var(--border))] w-full"
+              >
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-full bg-amber-500/12 flex items-center justify-center">
                     <MapPin size={18} className="text-amber-400" />
@@ -929,7 +936,7 @@ export default function CreatorProfilePage() {
                   </div>
                 </div>
                 <ChevronRight size={16} className="text-[hsl(var(--muted-foreground))]" />
-              </div>
+              </button>
             )}
           </div>
         </div>
@@ -1076,31 +1083,7 @@ export default function CreatorProfilePage() {
         </div>
       )}
 
-      {/* ── About section ───────────────────────────────────────────────────── */}
-      {(creator.descricao?.bio || (creator.descricao?.tags && creator.descricao.tags.length > 0)) && (
-        <div className="px-4 mb-6 max-w-4xl mx-auto w-full">
-          <h2 className="text-base font-bold text-[hsl(var(--foreground))] mb-3">{t('creator.about')}</h2>
-          <div className="p-4 rounded-xl bg-[hsl(var(--card))] border border-[hsl(var(--border))]">
-            {creator.descricao?.bio && (
-              <p className="text-sm text-[hsl(var(--muted-foreground))] leading-relaxed mb-3">
-                {creator.descricao.bio}
-              </p>
-            )}
-            {creator.descricao?.tags && creator.descricao.tags.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {creator.descricao.tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="px-2.5 py-1 rounded-full text-xs font-medium bg-[hsl(var(--primary)/0.12)] text-[hsl(var(--primary))]"
-                  >
-                    #{tag}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      {/* About section — hidden (bio already shown below the name) */}
 
       {/* ── Modals ──────────────────────────────────────────────────────────── */}
 
@@ -1110,6 +1093,7 @@ export default function CreatorProfilePage() {
           creatorName={creator.nome}
           onClose={() => setSelectedLive(null)}
           onEnter={() => handleEnterLive(selectedLive)}
+          isLoading={isBuyingTicket}
         />
       )}
 
@@ -1125,6 +1109,15 @@ export default function CreatorProfilePage() {
           pack={selectedPack}
           onClose={() => setSelectedPack(null)}
           onBuy={handleBuyPack}
+        />
+      )}
+
+      {showMeetingModal && (
+        <MeetingModal
+          whatsapp={creator.whatsapp}
+          valor1Hora={creator.valor_1_hora}
+          valor30Min={creator.valor_30_min}
+          onClose={() => setShowMeetingModal(false)}
         />
       )}
 

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import {
   ArrowLeft,
   Image as ImageIcon,
@@ -9,43 +9,47 @@ import {
   Lock,
   Play,
   X,
-  DollarSign,
   Package,
-  Grid3x3,
+  ChevronRight,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
-import { APP_URL } from '@/lib/config'
 import { formatCurrency } from '@/lib/utils'
-import type { PackItem } from '@/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type MediaFilter = 'todos' | 'fotos' | 'videos' | 'audios'
+type TabKey = 'packs' | 'fotos' | 'videos'
 
-interface EnrichedItem extends PackItem {
+interface PackCard {
+  id: string
+  title: string
+  price: number
+  cover_url: string | null
+  items_count: number
+  items: PackMediaItem[]
+}
+
+interface PackMediaItem {
+  id: string
+  url: string | null
+  type: 'image' | 'video' | 'audio'
+  title: string
   pack_id: string
   pack_title: string
   pack_price: number
-  pack_stripe_price_id: string | null
-  pack_creator_id: string
-  is_purchased: boolean
+  is_locked: boolean
+}
+
+interface ProfilePhoto {
+  id: string
+  url: string
 }
 
 interface ContentData {
   creatorName: string
-  items: EnrichedItem[]
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function mediaTypeToFilter(type: PackItem['media_type']): MediaFilter {
-  switch (type) {
-    case 'image': return 'fotos'
-    case 'video': return 'videos'
-    case 'audio': return 'audios'
-  }
+  packs: PackCard[]
+  profilePhotos: ProfilePhoto[]
 }
 
 // ─── Fetch ────────────────────────────────────────────────────────────────────
@@ -54,79 +58,90 @@ async function fetchCreatorContent(
   profileId: string,
   userId: string | undefined
 ): Promise<ContentData> {
-  // Creator name
-  const { data: profileData } = await supabase
-    .from('profiles')
-    .select('full_name, username')
-    .eq('id', profileId)
-    .single()
+  const [profileRes, packsRes, imagesRes, purchasesRes] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('full_name, username')
+      .eq('id', profileId)
+      .single(),
+    supabase
+      .from('packs')
+      .select('id, title, price, cover_image_url, pack_items(*)')
+      .eq('profile_id', profileId)
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('profile_images')
+      .select('id, image_url')
+      .eq('profile_id', profileId)
+      .order('index', { ascending: true }),
+    userId
+      ? supabase
+          .from('pack_purchases')
+          .select('pack_id')
+          .eq('user_id', userId)
+          .eq('status', 'completed')
+      : Promise.resolve({ data: [] as { pack_id: string }[], error: null }),
+  ])
 
-  const creatorName = profileData?.full_name ?? profileData?.username ?? 'Creator'
+  if (packsRes.error) throw packsRes.error
 
-  // Packs with items
-  const { data: packsData, error: packsError } = await supabase
-    .from('packs')
-    .select('id, title, price, stripe_price_id, pack_items(*)')
-    .eq('profile_id', profileId)
-    .order('created_at', { ascending: false })
+  const creatorName =
+    profileRes.data?.full_name ?? profileRes.data?.username ?? 'Creator'
 
-  if (packsError) throw packsError
+  const purchasedIds = new Set(
+    (purchasesRes.data ?? []).map((p: any) => p.pack_id)
+  )
 
-  const packs = (packsData ?? []).map((p: any) => ({
-    id: p.id,
-    creator_id: profileId,
-    title: p.title,
-    description: p.description ?? null,
-    price: p.price,
-    stripe_price_id: p.stripe_price_id ?? null,
-    cover_url: p.cover_image_url ?? null,
-    items: (p.pack_items ?? []) as PackItem[],
-    created_at: p.created_at,
-  }))
-
-  // Purchased pack IDs
-  let purchasedPackIds = new Set<string>()
-  if (userId) {
-    const { data: purchasesData } = await supabase
-      .from('pack_purchases')
-      .select('pack_id')
-      .eq('user_id', userId)
-      .eq('status', 'completed')
-
-    purchasedPackIds = new Set((purchasesData ?? []).map((p: any) => p.pack_id))
+  const mapType = (t: string): 'image' | 'video' | 'audio' => {
+    if (t === 'photo') return 'image'
+    if (t === 'video') return 'video'
+    return 'audio'
   }
 
-  // Flatten pack items
-  const items: EnrichedItem[] = []
-  for (const pack of packs) {
-    const isPurchased = purchasedPackIds.has(pack.id)
-    for (const item of pack.items) {
-      items.push({
-        ...item,
-        pack_id: pack.id,
-        pack_title: pack.title,
-        pack_price: pack.price,
-        pack_stripe_price_id: pack.stripe_price_id,
-        pack_creator_id: pack.creator_id,
-        is_purchased: isPurchased,
-        is_locked: item.is_locked && !isPurchased,
-      })
+  const packs: PackCard[] = (packsRes.data ?? []).map((p: any) => {
+    const rawItems = p.pack_items ?? []
+    const isPurchased = purchasedIds.has(p.id)
+    return {
+      id: p.id,
+      title: p.title,
+      price: p.price,
+      cover_url: p.cover_image_url ?? null,
+      items_count: rawItems.length,
+      items: rawItems.map((pi: any): PackMediaItem => ({
+        id: pi.id,
+        url: pi.file_url ?? pi.thumbnail_url ?? null,
+        type: mapType(pi.item_type),
+        title: pi.file_name ?? '',
+        pack_id: p.id,
+        pack_title: p.title,
+        pack_price: p.price,
+        is_locked: !isPurchased,
+      })),
     }
-  }
+  })
 
-  return { creatorName, items }
+  const profilePhotos: ProfilePhoto[] = (imagesRes.data ?? []).map(
+    (img: any) => ({
+      id: img.id,
+      url: img.image_url,
+    })
+  )
+
+  return { creatorName, packs, profilePhotos }
 }
 
-// ─── Filter pill ─────────────────────────────────────────────────────────────
+// ─── Tab pill ─────────────────────────────────────────────────────────────────
 
-function FilterPill({
+function TabPill({
   label,
   icon,
+  count,
   active,
   onClick,
 }: {
   label: string
-  icon?: React.ReactNode
+  icon: React.ReactNode
+  count: number
   active: boolean
   onClick: () => void
 }) {
@@ -134,38 +149,121 @@ function FilterPill({
     <button
       onClick={onClick}
       className={`
-        shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors duration-150
+        shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-150
         ${
           active
-            ? 'bg-[hsl(var(--primary))] text-white'
-            : 'bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]'
+            ? 'bg-[hsl(var(--primary))] text-white shadow-[0_0_16px_hsl(var(--primary)/0.25)]'
+            : 'bg-[hsl(var(--card))] text-[hsl(var(--muted-foreground))] border border-[hsl(var(--border))] hover:border-[hsl(var(--primary)/0.3)] hover:text-[hsl(var(--foreground))]'
         }
       `}
     >
       {icon}
       {label}
+      <span className={`text-[10px] ${active ? 'text-white/70' : 'text-[hsl(var(--muted-foreground)/0.6)]'}`}>
+        {count}
+      </span>
     </button>
   )
 }
 
-// ─── Media thumbnail ─────────────────────────────────────────────────────────
+// ─── Pack card (inline) ──────────────────────────────────────────────────────
+
+function PackCardInline({
+  pack,
+  onClick,
+}: {
+  pack: PackCard
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="
+        flex-shrink-0 w-44 rounded-xl overflow-hidden cursor-pointer
+        border border-[hsl(var(--border))]
+        bg-[hsl(var(--card))]
+        transition-all duration-200 active:scale-[0.97]
+        hover:border-[hsl(var(--primary)/0.4)]
+        text-left select-none
+      "
+    >
+      <div className="relative aspect-[4/3] overflow-hidden bg-[hsl(var(--secondary))]">
+        {pack.cover_url ? (
+          <img
+            src={pack.cover_url}
+            alt={pack.title}
+            loading="lazy"
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[hsl(var(--primary)/0.15)] to-[hsl(var(--secondary))]">
+            <Package size={28} className="text-[hsl(var(--primary)/0.5)]" />
+          </div>
+        )}
+        <div className="absolute bottom-2 right-2">
+          <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-[hsl(var(--primary))] text-white shadow-md">
+            {formatCurrency(pack.price)}
+          </span>
+        </div>
+      </div>
+      <div className="p-2.5 flex flex-col gap-1.5">
+        <p className="text-xs font-semibold text-[hsl(var(--foreground))] leading-tight line-clamp-1">
+          {pack.title}
+        </p>
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] text-[hsl(var(--muted-foreground))]">
+            {pack.items_count} {pack.items_count === 1 ? 'item' : 'itens'}
+          </span>
+          <ChevronRight size={12} className="text-[hsl(var(--primary))]" />
+        </div>
+      </div>
+    </button>
+  )
+}
+
+// ─── Photo thumbnail ─────────────────────────────────────────────────────────
+
+function PhotoThumb({
+  url,
+  alt,
+  onClick,
+}: {
+  url: string
+  alt: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="relative aspect-square overflow-hidden bg-[hsl(var(--secondary))] rounded-md group"
+    >
+      <img
+        src={url}
+        alt={alt}
+        loading="lazy"
+        className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-300"
+      />
+    </button>
+  )
+}
+
+// ─── Pack media thumbnail ────────────────────────────────────────────────────
 
 function MediaThumb({
   item,
   onClick,
 }: {
-  item: EnrichedItem
+  item: PackMediaItem
   onClick: () => void
 }) {
-  const isVideo = item.media_type === 'video'
-  const isAudio = item.media_type === 'audio'
+  const isVideo = item.type === 'video'
+  const isAudio = item.type === 'audio'
 
   return (
     <button
       onClick={onClick}
-      className="relative aspect-square overflow-hidden bg-[hsl(var(--secondary))] rounded-sm group"
+      className="relative aspect-square overflow-hidden bg-[hsl(var(--secondary))] rounded-md group"
     >
-      {/* Media preview */}
       {isAudio ? (
         <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-purple-900/40 to-purple-600/20">
           <Mic size={24} className="text-purple-400" />
@@ -175,12 +273,12 @@ function MediaThumb({
             </span>
           )}
         </div>
-      ) : item.media_url ? (
+      ) : item.url ? (
         isVideo ? (
           <div className="relative w-full h-full bg-black">
             <video
-              src={item.media_url}
-              className={`w-full h-full object-cover ${item.is_locked ? 'blur-md scale-105 opacity-60' : ''}`}
+              src={item.url}
+              className={`w-full h-full object-cover ${item.is_locked ? 'blur-lg scale-110 opacity-50' : ''}`}
               muted
               preload="metadata"
             />
@@ -194,38 +292,38 @@ function MediaThumb({
           </div>
         ) : (
           <img
-            src={item.media_url}
+            src={item.url}
             alt={item.title}
             loading="lazy"
-            className={`w-full h-full object-cover transition-transform group-hover:scale-105 duration-300 ${item.is_locked ? 'blur-md scale-105 opacity-60' : ''}`}
+            className={`w-full h-full object-cover transition-transform group-hover:scale-105 duration-300 ${item.is_locked ? 'blur-lg scale-110 opacity-50' : ''}`}
           />
         )
       ) : (
-        <div className="w-full h-full flex items-center justify-center bg-[hsl(var(--secondary))]">
+        <div className="w-full h-full flex items-center justify-center">
           <ImageIcon size={24} className="text-[hsl(var(--muted-foreground))]" />
         </div>
       )}
 
       {/* Locked overlay */}
       {item.is_locked && (
-        <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center gap-1">
-          <Lock size={18} className="text-white" />
-          <span className="text-[10px] font-bold text-white">
+        <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center gap-1.5">
+          <Lock size={20} className="text-white/90" />
+          <span className="text-[10px] font-bold text-white bg-black/30 px-2 py-0.5 rounded-full">
             {formatCurrency(item.pack_price)}
           </span>
         </div>
       )}
 
       {/* Type badge */}
-      {!item.is_locked && (
+      {!item.is_locked && (isVideo || isAudio) && (
         <div className="absolute top-1.5 right-1.5">
           {isVideo && (
-            <span className="w-5 h-5 flex items-center justify-center rounded-full bg-black/50">
+            <span className="w-5 h-5 flex items-center justify-center rounded-full bg-black/50 backdrop-blur-sm">
               <Play size={10} className="text-white ml-0.5" />
             </span>
           )}
           {isAudio && (
-            <span className="w-5 h-5 flex items-center justify-center rounded-full bg-purple-600/80">
+            <span className="w-5 h-5 flex items-center justify-center rounded-full bg-purple-600/80 backdrop-blur-sm">
               <Mic size={10} className="text-white" />
             </span>
           )}
@@ -238,10 +336,14 @@ function MediaThumb({
 // ─── Lightbox ─────────────────────────────────────────────────────────────────
 
 function Lightbox({
-  item,
+  url,
+  title,
+  type,
   onClose,
 }: {
-  item: EnrichedItem
+  url: string
+  title?: string
+  type: 'image' | 'video' | 'audio'
   onClose: () => void
 }) {
   return (
@@ -249,76 +351,61 @@ function Lightbox({
       className="fixed inset-0 z-50 bg-black/95 flex flex-col"
       onClick={onClose}
     >
-      {/* Header */}
       <div
-        className="flex items-center justify-between px-4 py-4"
+        className="flex items-center justify-end px-4 py-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <div>
-          <p className="text-sm font-semibold text-white">{item.title}</p>
-          <p className="text-xs text-white/50">{item.pack_title}</p>
-        </div>
         <button
           onClick={onClose}
-          className="w-9 h-9 flex items-center justify-center rounded-full bg-white/10"
+          className="w-9 h-9 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors"
         >
           <X size={18} className="text-white" />
         </button>
       </div>
 
-      {/* Media */}
       <div
         className="flex-1 flex items-center justify-center p-4"
         onClick={(e) => e.stopPropagation()}
       >
-        {item.media_type === 'image' && item.media_url && (
+        {type === 'image' && (
           <img
-            src={item.media_url}
-            alt={item.title}
+            src={url}
+            alt={title ?? ''}
             className="max-w-full max-h-full object-contain rounded-lg"
           />
         )}
-        {item.media_type === 'video' && item.media_url && (
+        {type === 'video' && (
           <video
-            src={item.media_url}
+            src={url}
             controls
             autoPlay
             className="max-w-full max-h-full rounded-lg"
           />
         )}
-        {item.media_type === 'audio' && item.media_url && (
+        {type === 'audio' && (
           <div className="flex flex-col items-center gap-6 w-full max-w-xs">
             <div className="w-32 h-32 rounded-full bg-gradient-to-br from-purple-600 to-purple-900 flex items-center justify-center shadow-2xl">
               <Mic size={48} className="text-white" />
             </div>
-            <p className="text-white font-semibold text-center">{item.title}</p>
-            <audio src={item.media_url} controls className="w-full" />
+            {title && <p className="text-white font-semibold text-center">{title}</p>}
+            <audio src={url} controls className="w-full" />
           </div>
         )}
       </div>
-
-      {/* Description */}
-      {item.description && (
-        <div className="px-4 pb-6" onClick={(e) => e.stopPropagation()}>
-          <p className="text-sm text-white/70 text-center">{item.description}</p>
-        </div>
-      )}
     </div>
   )
 }
 
-// ─── Purchase Modal ───────────────────────────────────────────────────────────
+// ─── Pack detail modal ───────────────────────────────────────────────────────
 
-function PurchaseModal({
-  item,
+function PackDetailModal({
+  pack,
   onClose,
-  onBuy,
-  isBuying,
+  onItemClick,
 }: {
-  item: EnrichedItem
+  pack: PackCard
   onClose: () => void
-  onBuy: () => void
-  isBuying: boolean
+  onItemClick: (item: PackMediaItem) => void
 }) {
   const { t } = useTranslation()
   return (
@@ -327,70 +414,53 @@ function PurchaseModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg rounded-t-2xl bg-[hsl(var(--card))] border-t border-[hsl(var(--border))] p-6 pb-10"
+        className="w-full max-w-lg max-h-[85vh] rounded-t-2xl bg-[hsl(var(--background))] border-t border-[hsl(var(--border))] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Handle */}
-        <div className="mx-auto w-10 h-1 rounded-full bg-[hsl(var(--border))] mb-4" />
+        <div className="pt-3 pb-2 flex justify-center">
+          <div className="w-10 h-1 rounded-full bg-[hsl(var(--border))]" />
+        </div>
 
-        {/* Close */}
-        <div className="flex justify-end mb-2">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 pb-3 border-b border-[hsl(var(--border))]">
+          <div className="flex-1 min-w-0">
+            <h3 className="text-base font-bold text-[hsl(var(--foreground))] truncate">
+              {pack.title}
+            </h3>
+            <p className="text-xs text-[hsl(var(--muted-foreground))]">
+              {pack.items_count} {pack.items_count === 1 ? 'item' : 'itens'} &middot; {formatCurrency(pack.price)}
+            </p>
+          </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-full hover:bg-[hsl(var(--secondary))]"
+            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-[hsl(var(--secondary))] transition-colors"
           >
-            <X size={20} className="text-[hsl(var(--foreground))]" />
+            <X size={18} className="text-[hsl(var(--foreground))]" />
           </button>
         </div>
 
-        <h2 className="text-lg font-bold text-[hsl(var(--foreground))] text-center mb-6">
-          {t('contentPage.purchaseTitle')}
-        </h2>
-
-        {/* Preview blurred */}
-        {item.media_url && item.media_type === 'image' && (
-          <div className="w-full aspect-video rounded-xl overflow-hidden mb-4 relative">
-            <img
-              src={item.media_url}
-              alt={item.title}
-              className="w-full h-full object-cover blur-sm scale-105"
-            />
-            <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-              <Lock size={32} className="text-white" />
+        {/* Items grid */}
+        <div className="flex-1 overflow-y-auto p-3">
+          {pack.items.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <Package size={32} className="text-[hsl(var(--muted-foreground))] mb-2" />
+              <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                {t('contentPage.emptyAll')}
+              </p>
             </div>
-          </div>
-        )}
-
-        {/* Info */}
-        <p className="text-sm font-semibold text-[hsl(var(--primary))] mb-2">{t('contentPage.info')}</p>
-        <p className="text-sm text-[hsl(var(--muted-foreground))] mb-3">{item.pack_title}</p>
-
-        <div className="flex items-center gap-2 mb-2">
-          <DollarSign size={18} className="text-[hsl(var(--muted-foreground))]" />
-          <span className="text-sm font-semibold text-[hsl(var(--foreground))]">
-            {formatCurrency(item.pack_price)}
-          </span>
+          ) : (
+            <div className="grid grid-cols-3 gap-1.5">
+              {pack.items.map((item) => (
+                <MediaThumb
+                  key={item.id}
+                  item={item}
+                  onClick={() => onItemClick(item)}
+                />
+              ))}
+            </div>
+          )}
         </div>
-
-        <p className="text-sm font-semibold text-[hsl(var(--primary))] mb-1 mt-4">{t('contentPage.contentLabel')}</p>
-        <p className="text-sm text-[hsl(var(--muted-foreground))] mb-8">
-          {item.title}
-          {item.description ? ` — ${item.description}` : ''}
-        </p>
-
-        <button
-          onClick={onBuy}
-          disabled={isBuying}
-          className="
-            w-full flex items-center justify-center gap-2 py-3 rounded-xl
-            bg-[hsl(var(--primary))] text-white font-semibold text-sm
-            hover:opacity-90 active:scale-[0.98] transition-all duration-150
-            disabled:opacity-60 disabled:cursor-not-allowed
-          "
-        >
-          <Package size={18} />
-          {isBuying ? t('contentPage.processing') : `${t('contentPage.buyFor')} ${formatCurrency(item.pack_price)}`}
-        </button>
       </div>
     </div>
   )
@@ -400,31 +470,44 @@ function PurchaseModal({
 
 function ContentSkeleton() {
   return (
-    <div className="grid grid-cols-3 gap-0.5 animate-pulse">
-      {Array.from({ length: 9 }).map((_, i) => (
-        <div key={i} className="aspect-square bg-[hsl(var(--secondary))]" />
-      ))}
+    <div className="animate-pulse space-y-6 px-4 pt-4">
+      {/* Pack skeleton */}
+      <div>
+        <div className="h-4 w-24 rounded bg-[hsl(var(--secondary))] mb-3" />
+        <div className="flex gap-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="w-44 shrink-0 rounded-xl overflow-hidden border border-[hsl(var(--border))]">
+              <div className="aspect-[4/3] bg-[hsl(var(--secondary))]" />
+              <div className="p-2.5 space-y-2">
+                <div className="h-3 w-3/4 rounded bg-[hsl(var(--secondary))]" />
+                <div className="h-2 w-1/2 rounded bg-[hsl(var(--secondary))]" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      {/* Photo grid skeleton */}
+      <div>
+        <div className="h-4 w-20 rounded bg-[hsl(var(--secondary))] mb-3" />
+        <div className="grid grid-cols-3 gap-1.5">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="aspect-square rounded-md bg-[hsl(var(--secondary))]" />
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
 
 // ─── Empty state ─────────────────────────────────────────────────────────────
 
-function EmptyContent({ filter }: { filter: MediaFilter }) {
-  const { t } = useTranslation()
-  const messages: Record<MediaFilter, string> = {
-    todos: t('contentPage.emptyAll'),
-    fotos: t('contentPage.emptyPhotos'),
-    videos: t('contentPage.emptyVideos'),
-    audios: t('contentPage.emptyAudios'),
-  }
-
+function EmptyState({ message, icon }: { message: string; icon: React.ReactNode }) {
   return (
     <div className="flex flex-col items-center justify-center gap-3 py-16 text-center px-8">
       <div className="w-14 h-14 rounded-full bg-[hsl(var(--secondary))] flex items-center justify-center">
-        <Grid3x3 size={24} className="text-[hsl(var(--muted-foreground))]" />
+        {icon}
       </div>
-      <p className="text-sm text-[hsl(var(--muted-foreground))]">{messages[filter]}</p>
+      <p className="text-sm text-[hsl(var(--muted-foreground))]">{message}</p>
     </div>
   )
 }
@@ -436,107 +519,85 @@ export default function ContentPage() {
   const resolvedProfileId = profileId ?? creatorId
   const navigate = useNavigate()
   const { profile: currentUser } = useAuthStore()
-
-  const [activeFilter, setActiveFilter] = useState<MediaFilter>('todos')
-  const [lightboxItem, setLightboxItem] = useState<EnrichedItem | null>(null)
-  const [purchaseItem, setPurchaseItem] = useState<EnrichedItem | null>(null)
-  const [isBuying, setIsBuying] = useState(false)
-
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ['creator-content', resolvedProfileId, currentUser?.id],
-    queryFn: () => fetchCreatorContent(resolvedProfileId!, currentUser?.id),
-    enabled: !!resolvedProfileId,
-    staleTime: 1000 * 60 * 2,
-  })
-
-  const handleItemClick = (item: EnrichedItem) => {
-    if (item.is_locked) {
-      setPurchaseItem(item)
-    } else {
-      setLightboxItem(item)
-    }
-  }
-
-  const handleBuy = async () => {
-    if (!purchaseItem) return
-    const item = purchaseItem
-    setIsBuying(true)
-    try {
-      const { data, error } = await supabase.functions.invoke('create-stripe-checkout', {
-        body: {
-          creator_id: item.pack_creator_id,
-          product_id: item.pack_id,
-          stripe_price_id: item.pack_stripe_price_id,
-          product_type: 'pack',
-          success_url: `${APP_URL}/purchases`,
-          cancel_url: `${APP_URL}/creator/${item.pack_creator_id}/content`,
-        },
-      })
-      if (error) throw error
-      setPurchaseItem(null)
-      if (data?.checkoutUrl) {
-        window.location.href = data.checkoutUrl
-      }
-    } catch (err) {
-      console.error('Checkout error:', err)
-    } finally {
-      setIsBuying(false)
-    }
-  }
-
-  // Filtered items
-  const filteredItems = (data?.items ?? []).filter((item) => {
-    if (activeFilter === 'todos') return true
-    return mediaTypeToFilter(item.media_type) === activeFilter
-  })
-
-  const counts = {
-    todos: data?.items.length ?? 0,
-    fotos: data?.items.filter((i) => i.media_type === 'image').length ?? 0,
-    videos: data?.items.filter((i) => i.media_type === 'video').length ?? 0,
-    audios: data?.items.filter((i) => i.media_type === 'audio').length ?? 0,
-  }
-
   const { t } = useTranslation()
 
-  const FILTERS: { key: MediaFilter; label: string; icon: React.ReactNode }[] = [
-    { key: 'todos', label: `${t('contentPage.filterAll')} (${counts.todos})`, icon: <Grid3x3 size={12} /> },
-    { key: 'fotos', label: `${t('contentPage.filterPhotos')} (${counts.fotos})`, icon: <ImageIcon size={12} /> },
-    { key: 'videos', label: `${t('contentPage.filterVideos')} (${counts.videos})`, icon: <Video size={12} /> },
-    { key: 'audios', label: `${t('contentPage.filterAudios')} (${counts.audios})`, icon: <Mic size={12} /> },
+  const [activeTab, setActiveTab] = useState<TabKey>('packs')
+  const [selectedPack, setSelectedPack] = useState<PackCard | null>(null)
+  const [lightbox, setLightbox] = useState<{
+    url: string
+    title?: string
+    type: 'image' | 'video' | 'audio'
+  } | null>(null)
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['creator-content', resolvedProfileId],
+    queryFn: () => {
+      if (!resolvedProfileId) throw new Error('profileId missing')
+      return fetchCreatorContent(resolvedProfileId, currentUser?.id)
+    },
+    enabled: !!resolvedProfileId,
+    staleTime: 1000 * 60 * 2,
+    placeholderData: keepPreviousData,
+  })
+
+  // Aggregate all pack media items
+  const allPackItems = data?.packs.flatMap((p) => p.items) ?? []
+  const photoItems = allPackItems.filter((i) => i.type === 'image')
+  const videoItems = allPackItems.filter((i) => i.type === 'video')
+
+  const handlePackItemClick = (item: PackMediaItem) => {
+    if (item.is_locked || !item.url) return
+    setLightbox({ url: item.url, title: item.title, type: item.type })
+  }
+
+  const handlePhotoClick = (url: string) => {
+    setLightbox({ url, type: 'image' })
+  }
+
+  const counts = {
+    packs: data?.packs.length ?? 0,
+    fotos: (data?.profilePhotos.length ?? 0) + photoItems.length,
+    videos: videoItems.length,
+  }
+
+  const TABS: { key: TabKey; label: string; icon: React.ReactNode; count: number }[] = [
+    { key: 'packs', label: t('contentPage.tabPacks'), icon: <Package size={13} />, count: counts.packs },
+    { key: 'fotos', label: t('contentPage.filterPhotos'), icon: <ImageIcon size={13} />, count: counts.fotos },
+    { key: 'videos', label: t('contentPage.filterVideos'), icon: <Video size={13} />, count: counts.videos },
   ]
 
   return (
     <div className="flex flex-col bg-[hsl(var(--background))] min-h-screen">
 
       {/* ── Header ──────────────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-10 bg-[hsl(var(--background))] border-b border-[hsl(var(--border))]">
-        <div className="flex items-center gap-3 px-4 py-4 max-w-4xl mx-auto">
+      <header className="sticky top-0 z-10 bg-[hsl(var(--background)/0.85)] backdrop-blur-lg border-b border-[hsl(var(--border))]">
+        <div className="flex items-center gap-3 px-4 py-3 max-w-4xl mx-auto">
           <button
             onClick={() => navigate(-1)}
-            className="w-9 h-9 flex items-center justify-center rounded-full bg-[hsl(var(--secondary))]"
+            className="w-9 h-9 flex items-center justify-center rounded-full bg-[hsl(var(--secondary))] hover:bg-[hsl(var(--secondary)/0.8)] transition-colors"
             aria-label="Voltar"
           >
             <ArrowLeft size={18} className="text-[hsl(var(--foreground))]" />
           </button>
           <div className="flex-1 min-w-0">
             <h1 className="text-base font-bold text-[hsl(var(--foreground))] truncate">
-              {data?.creatorName ?? 'Conteúdo'}
+              {data?.creatorName ?? '...'}
             </h1>
-            <p className="text-xs text-[hsl(var(--muted-foreground))]">{t('contentPage.gallery')}</p>
+            <p className="text-[11px] text-[hsl(var(--muted-foreground))]">{t('contentPage.gallery')}</p>
           </div>
         </div>
 
-        {/* Filters */}
+        {/* Tabs */}
         {!isLoading && (
           <div className="flex gap-2 overflow-x-auto scrollbar-none px-4 pb-3 max-w-4xl mx-auto">
-            {FILTERS.map((f) => (
-              <FilterPill
-                key={f.key}
-                label={f.label}
-                icon={f.icon}
-                active={activeFilter === f.key}
-                onClick={() => setActiveFilter(f.key)}
+            {TABS.map((tab) => (
+              <TabPill
+                key={tab.key}
+                label={tab.label}
+                icon={tab.icon}
+                count={tab.count}
+                active={activeTab === tab.key}
+                onClick={() => setActiveTab(tab.key)}
               />
             ))}
           </div>
@@ -547,55 +608,122 @@ export default function ContentPage() {
       <main className="flex-1">
         <div className="max-w-4xl mx-auto">
 
-        {/* Loading */}
-        {isLoading && (
-          <div className="p-0.5">
-            <ContentSkeleton />
-          </div>
-        )}
+          {/* Loading */}
+          {isLoading && <ContentSkeleton />}
 
-        {/* Error */}
-        {isError && !isLoading && (
-          <div className="flex items-center justify-center py-16 px-8 text-center">
-            <p className="text-sm text-[hsl(var(--muted-foreground))]">
-              {t('contentPage.loadError')}
-            </p>
-          </div>
-        )}
+          {/* Error */}
+          {isError && !isLoading && (
+            <EmptyState
+              message={t('contentPage.loadError')}
+              icon={<X size={24} className="text-[hsl(var(--muted-foreground))]" />}
+            />
+          )}
 
-        {/* Grid */}
-        {!isLoading && !isError && (
-          <>
-            {filteredItems.length === 0 ? (
-              <EmptyContent filter={activeFilter} />
-            ) : (
-              <div className="grid grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-0.5">
-                {filteredItems.map((item) => (
-                  <MediaThumb
-                    key={item.id}
-                    item={item}
-                    onClick={() => handleItemClick(item)}
-                  />
-                ))}
-              </div>
-            )}
-          </>
-        )}
+          {/* ── Tab: Packs ────────────────────────────────────────────────── */}
+          {!isLoading && !isError && activeTab === 'packs' && (
+            <>
+              {counts.packs === 0 ? (
+                <EmptyState
+                  message={t('contentPage.emptyPacks')}
+                  icon={<Package size={24} className="text-[hsl(var(--muted-foreground))]" />}
+                />
+              ) : (
+                <div className="px-4 pt-4 pb-6">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                    {data!.packs.map((pack) => (
+                      <PackCardInline
+                        key={pack.id}
+                        pack={pack}
+                        onClick={() => setSelectedPack(pack)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ── Tab: Photos ───────────────────────────────────────────────── */}
+          {!isLoading && !isError && activeTab === 'fotos' && (
+            <>
+              {counts.fotos === 0 ? (
+                <EmptyState
+                  message={t('contentPage.emptyPhotos')}
+                  icon={<ImageIcon size={24} className="text-[hsl(var(--muted-foreground))]" />}
+                />
+              ) : (
+                <div className="p-2">
+                  <div className="grid grid-cols-3 md:grid-cols-4 gap-1.5">
+                    {/* Profile photos (public) */}
+                    {data!.profilePhotos.map((photo) => (
+                      <PhotoThumb
+                        key={photo.id}
+                        url={photo.url}
+                        alt="Foto"
+                        onClick={() => handlePhotoClick(photo.url)}
+                      />
+                    ))}
+                    {/* Pack photo items */}
+                    {photoItems.map((item) => (
+                      <MediaThumb
+                        key={item.id}
+                        item={item}
+                        onClick={() => handlePackItemClick(item)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ── Tab: Videos ───────────────────────────────────────────────── */}
+          {!isLoading && !isError && activeTab === 'videos' && (
+            <>
+              {counts.videos === 0 ? (
+                <EmptyState
+                  message={t('contentPage.emptyVideos')}
+                  icon={<Video size={24} className="text-[hsl(var(--muted-foreground))]" />}
+                />
+              ) : (
+                <div className="p-2">
+                  <div className="grid grid-cols-3 md:grid-cols-4 gap-1.5">
+                    {videoItems.map((item) => (
+                      <MediaThumb
+                        key={item.id}
+                        item={item}
+                        onClick={() => handlePackItemClick(item)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </main>
 
-      {/* ── Lightbox ────────────────────────────────────────────────────────── */}
-      {lightboxItem && (
-        <Lightbox item={lightboxItem} onClose={() => setLightboxItem(null)} />
+      {/* ── Pack detail modal ──────────────────────────────────────────────── */}
+      {selectedPack && (
+        <PackDetailModal
+          pack={selectedPack}
+          onClose={() => setSelectedPack(null)}
+          onItemClick={(item) => {
+            if (!item.is_locked && item.url) {
+              setSelectedPack(null)
+              setLightbox({ url: item.url, title: item.title, type: item.type })
+            }
+          }}
+        />
       )}
 
-      {/* ── Purchase modal ──────────────────────────────────────────────────── */}
-      {purchaseItem && (
-        <PurchaseModal
-          item={purchaseItem}
-          onClose={() => setPurchaseItem(null)}
-          onBuy={handleBuy}
-          isBuying={isBuying}
+      {/* ── Lightbox ──────────────────────────────────────────────────────── */}
+      {lightbox && (
+        <Lightbox
+          url={lightbox.url}
+          title={lightbox.title}
+          type={lightbox.type}
+          onClose={() => setLightbox(null)}
         />
       )}
     </div>

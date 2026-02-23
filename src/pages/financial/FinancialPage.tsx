@@ -148,7 +148,7 @@ function TransactionItem({ tx, typeLabel, statusLabel }: { tx: Transaction; type
 export default function FinancialPage() {
   const navigate = useNavigate()
   const { t } = useTranslation()
-  const user = useAuthStore((s) => s.user)
+  const user = useAuthStore((s) => s.profile)
   const [period, setPeriod] = useState<Period>('1m')
   const [periodOpen, setPeriodOpen] = useState(false)
 

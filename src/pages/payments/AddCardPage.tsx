@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { ArrowLeft, CreditCard, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, CreditCard } from 'lucide-react'
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -41,10 +41,7 @@ export default function AddCardPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))]">
-          <ShieldCheck size={14} />
-          <p className="text-xs">{t('payments.addCard.stripeInfo')}</p>
-        </div>
+        {/* STRIPE_DISABLED: Stripe info hidden */}
 
         <button
           onClick={() => navigate(-1)}
