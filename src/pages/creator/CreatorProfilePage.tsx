@@ -624,10 +624,6 @@ export default function CreatorProfilePage() {
   const photos = creator.imagens.filter((img) => img.type === 'photo')
   const displayPhotos = showAllPhotos ? photos : photos.slice(0, 6)
 
-  const handleViewContent = () => {
-    navigate(`/creator/${creator.id}/content`)
-  }
-
   const handleBuyPack = async (pack: PackInfo) => {
     const userId = currentUser?.id || session?.user?.id
     if (!userId) {

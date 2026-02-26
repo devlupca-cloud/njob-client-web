@@ -48,16 +48,6 @@ async function fetchCall(callId: string, userId: string): Promise<CallInfo> {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function formatDateTime(dateStr: string): string {
-  const d = new Date(dateStr)
-  return d.toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
 function getCallWindow(call: CallInfo): 'open' | 'ended' {
   const now = Date.now()
   const start = new Date(call.scheduled_start_time).getTime()
