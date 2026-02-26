@@ -11,10 +11,13 @@ import {
   X,
   Package,
   ChevronRight,
+  Loader2,
+  Check,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
+import { useToast } from '@/components/ui/Toast'
 import { formatCurrency } from '@/lib/utils'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -28,6 +31,9 @@ interface PackCard {
   cover_url: string | null
   items_count: number
   items: PackMediaItem[]
+  stripe_price_id: string | null
+  creator_id: string
+  is_purchased: boolean
 }
 
 interface PackMediaItem {
@@ -66,7 +72,7 @@ async function fetchCreatorContent(
       .single(),
     supabase
       .from('packs')
-      .select('id, title, price, cover_image_url, pack_items(*)')
+      .select('id, title, price, cover_image_url, stripe_price_id, pack_items(*)')
       .eq('profile_id', profileId)
       .order('created_at', { ascending: false }),
     supabase
@@ -107,6 +113,9 @@ async function fetchCreatorContent(
       price: p.price,
       cover_url: p.cover_image_url ?? null,
       items_count: rawItems.length,
+      stripe_price_id: p.stripe_price_id ?? null,
+      creator_id: profileId,
+      is_purchased: isPurchased,
       items: rawItems.map((pi: any): PackMediaItem => ({
         id: pi.id,
         url: pi.file_url ?? pi.thumbnail_url ?? null,
@@ -175,6 +184,7 @@ function PackCardInline({
   pack: PackCard
   onClick: () => void
 }) {
+  const { t } = useTranslation()
   return (
     <button
       onClick={onClick}
@@ -201,9 +211,16 @@ function PackCardInline({
           </div>
         )}
         <div className="absolute bottom-2 right-2">
-          <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-[hsl(var(--primary))] text-white shadow-md">
-            {formatCurrency(pack.price)}
-          </span>
+          {pack.is_purchased ? (
+            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-600 text-white shadow-md">
+              <Check size={10} />
+              {t('contentPage.purchased')}
+            </span>
+          ) : (
+            <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-[hsl(var(--primary))] text-white shadow-md">
+              {formatCurrency(pack.price)}
+            </span>
+          )}
         </div>
       </div>
       <div className="p-2.5 flex flex-col gap-1.5">
@@ -402,10 +419,14 @@ function PackDetailModal({
   pack,
   onClose,
   onItemClick,
+  onBuy,
+  isBuying,
 }: {
   pack: PackCard
   onClose: () => void
   onItemClick: (item: PackMediaItem) => void
+  onBuy: (pack: PackCard) => void
+  isBuying?: boolean
 }) {
   const { t } = useTranslation()
   return (
@@ -461,6 +482,29 @@ function PackDetailModal({
             </div>
           )}
         </div>
+
+        {/* Buy button — only for unpurchased packs */}
+        {!pack.is_purchased && (
+          <div className="p-4 border-t border-[hsl(var(--border))]">
+            <button
+              onClick={() => onBuy(pack)}
+              disabled={isBuying}
+              className="
+                w-full flex items-center justify-center gap-2 py-3 rounded-xl
+                bg-[hsl(var(--primary))] text-white font-semibold text-sm
+                hover:opacity-90 active:scale-[0.98] transition-all duration-150
+                disabled:opacity-60 disabled:cursor-not-allowed
+              "
+            >
+              {isBuying ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : (
+                <Package size={18} />
+              )}
+              {t('creator.buyFor')} {formatCurrency(pack.price)}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -518,16 +562,75 @@ export default function ContentPage() {
   const { profileId, creatorId } = useParams<{ profileId?: string; creatorId?: string }>()
   const resolvedProfileId = profileId ?? creatorId
   const navigate = useNavigate()
-  const { profile: currentUser } = useAuthStore()
+  const { profile: currentUser, session } = useAuthStore()
   const { t } = useTranslation()
+
+  const { toast } = useToast()
 
   const [activeTab, setActiveTab] = useState<TabKey>('packs')
   const [selectedPack, setSelectedPack] = useState<PackCard | null>(null)
+  const [isBuyingPack, setIsBuyingPack] = useState(false)
   const [lightbox, setLightbox] = useState<{
     url: string
     title?: string
     type: 'image' | 'video' | 'audio'
   } | null>(null)
+
+  const handleBuyPack = async (pack: PackCard) => {
+    const userId = currentUser?.id || session?.user?.id
+    if (!userId) {
+      toast({ title: t('auth.sessionExpired'), type: 'error' })
+      return
+    }
+    if (!pack.stripe_price_id) {
+      toast({ title: t('creator.packNotAvailable'), type: 'error' })
+      return
+    }
+
+    setIsBuyingPack(true)
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData?.session?.access_token
+      if (!token) {
+        toast({ title: t('auth.sessionExpired'), type: 'error' })
+        return
+      }
+
+      const appUrl = import.meta.env.VITE_APP_URL || window.location.origin
+
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-stripe-checkout`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            creator_id: pack.creator_id,
+            stripe_price_id: pack.stripe_price_id,
+            product_id: pack.id,
+            product_type: 'pack',
+            success_url: `${appUrl}/purchases`,
+            cancel_url: `${appUrl}/creator/${pack.creator_id}/content`,
+          }),
+        }
+      )
+
+      const json = await res.json()
+
+      if (!json.success || !json.checkoutUrl) {
+        throw new Error(json.error || 'Checkout error')
+      }
+
+      window.location.href = json.checkoutUrl
+    } catch (err: any) {
+      console.error('[ContentPage] Pack checkout error:', err)
+      toast({ title: err?.message || t('creator.packPurchaseError'), type: 'error' })
+    } finally {
+      setIsBuyingPack(false)
+    }
+  }
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['creator-content', resolvedProfileId],
@@ -707,13 +810,15 @@ export default function ContentPage() {
       {selectedPack && (
         <PackDetailModal
           pack={selectedPack}
-          onClose={() => setSelectedPack(null)}
+          onClose={() => !isBuyingPack && setSelectedPack(null)}
           onItemClick={(item) => {
             if (!item.is_locked && item.url) {
               setSelectedPack(null)
               setLightbox({ url: item.url, title: item.title, type: item.type })
             }
           }}
+          onBuy={handleBuyPack}
+          isBuying={isBuyingPack}
         />
       )}
 

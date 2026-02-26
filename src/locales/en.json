@@ -50,6 +50,7 @@
   },
 
   "auth": {
+    "sessionExpired": "Session expired. Please log in again.",
     "login": {
       "welcomeBack": "Welcome back",
       "label": "Login",
@@ -280,6 +281,9 @@
     "ticketError": "Failed to purchase ticket. Please try again.",
     "packPurchased": "Pack purchased successfully!",
     "packError": "Failed to purchase pack. Please try again.",
+    "ticketNotAvailable": "This ticket is not yet available for purchase.",
+    "packNotAvailable": "This pack is not yet available for purchase.",
+    "packPurchaseError": "Failed to start payment. Please try again.",
     "contactWhatsapp": "Get in touch",
     "whatsappLabel": "WhatsApp",
     "meetingTitle": "In-person meeting",
@@ -502,7 +506,8 @@
     "info": "Info",
     "contentLabel": "Content",
     "processing": "Processing...",
-    "buyFor": "Buy for"
+    "buyFor": "Buy for",
+    "purchased": "Purchased"
   },
 
   "notFound": {

@@ -340,10 +340,12 @@ function PackModal({
   pack,
   onClose,
   onBuy,
+  isLoading,
 }: {
   pack: PackInfo
   onClose: () => void
   onBuy: (pack: PackInfo) => void
+  isLoading?: boolean
 }) {
   const { t } = useTranslation()
 
@@ -392,13 +394,19 @@ function PackModal({
 
         <button
           onClick={() => onBuy(pack)}
+          disabled={isLoading}
           className="
             w-full flex items-center justify-center gap-2 py-3 rounded-xl
             bg-[hsl(var(--primary))] text-white font-semibold text-sm
             hover:opacity-90 active:scale-[0.98] transition-all duration-150
+            disabled:opacity-60 disabled:cursor-not-allowed
           "
         >
-          <Package size={18} />
+          {isLoading ? (
+            <Loader2 size={18} className="animate-spin" />
+          ) : (
+            <Package size={18} />
+          )}
           {t('creator.buyFor')} {formatCurrency(pack.price)}
         </button>
       </div>
@@ -542,7 +550,7 @@ function ProfileSkeleton() {
 export default function CreatorProfilePage() {
   const { profileId } = useParams<{ profileId: string }>()
   const navigate = useNavigate()
-  const { profile: currentUser } = useAuthStore()
+  const { profile: currentUser, session } = useAuthStore()
   const { guardGuestAction } = useGuestGuard()
   const { t } = useTranslation()
 
@@ -619,46 +627,61 @@ export default function CreatorProfilePage() {
     navigate(`/creator/${creator.id}/content`)
   }
 
+  const [isBuyingPack, setIsBuyingPack] = useState(false)
+
   const handleBuyPack = async (pack: PackInfo) => {
-    if (!currentUser?.id) return
+    const userId = currentUser?.id || session?.user?.id
+    if (!userId) {
+      toast({ title: t('auth.sessionExpired'), type: 'error' })
+      return
+    }
+    if (!pack.stripe_price_id) {
+      toast({ title: t('creator.packNotAvailable'), type: 'error' })
+      return
+    }
 
-    setIsBuyingTicket(true)
+    setIsBuyingPack(true)
     try {
-      // Check if user already purchased this pack
-      const { count } = await supabase
-        .from('pack_purchases')
-        .select('id', { count: 'exact', head: true })
-        .eq('pack_id', pack.id)
-        .eq('user_id', currentUser.id)
-        .eq('status', 'completed')
-
-      if ((count ?? 0) > 0) {
-        setSelectedPack(null)
-        navigate(`/creator/${creator.id}/content`)
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData?.session?.access_token
+      if (!token) {
+        toast({ title: t('auth.sessionExpired'), type: 'error' })
         return
       }
 
-      // Insert purchase directly (bypass Stripe)
-      const { error } = await supabase
-        .from('pack_purchases')
-        .insert({
-          user_id: currentUser.id,
-          pack_id: pack.id,
-          purchase_price: pack.price,
-          status: 'completed',
-          currency: 'BRL',
-        })
+      const appUrl = import.meta.env.VITE_APP_URL || window.location.origin
 
-      if (error) throw error
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-stripe-checkout`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            creator_id: pack.creator_id,
+            stripe_price_id: pack.stripe_price_id,
+            product_id: pack.id,
+            product_type: 'pack',
+            success_url: `${appUrl}/purchases`,
+            cancel_url: `${appUrl}/creator/${pack.creator_id}`,
+          }),
+        }
+      )
 
-      toast({ title: t('creator.packPurchased'), type: 'success' })
-      setSelectedPack(null)
-      navigate('/purchases?tab=packs')
-    } catch (err) {
-      console.error('[CreatorProfile] Pack purchase error:', err)
-      toast({ title: t('creator.packError'), type: 'error' })
+      const json = await res.json()
+
+      if (!json.success || !json.checkoutUrl) {
+        throw new Error(json.error || 'Checkout error')
+      }
+
+      window.location.href = json.checkoutUrl
+    } catch (err: any) {
+      console.error('[CreatorProfile] Pack checkout error:', err)
+      toast({ title: err?.message || t('creator.packPurchaseError'), type: 'error' })
     } finally {
-      setIsBuyingTicket(false)
+      setIsBuyingPack(false)
     }
   }
 
@@ -670,7 +693,11 @@ export default function CreatorProfilePage() {
       return
     }
 
-    if (!currentUser?.id) return
+    const userId = currentUser?.id || session?.user?.id
+    if (!userId) {
+      toast({ title: t('auth.sessionExpired'), type: 'error' })
+      return
+    }
 
     setIsBuyingTicket(true)
     try {
@@ -679,7 +706,7 @@ export default function CreatorProfilePage() {
         .from('live_stream_tickets')
         .select('id', { count: 'exact', head: true })
         .eq('live_stream_id', live.id)
-        .eq('user_id', currentUser.id)
+        .eq('user_id', userId)
         .eq('status', 'completed')
 
       if ((count ?? 0) > 0) {
@@ -688,25 +715,50 @@ export default function CreatorProfilePage() {
         return
       }
 
-      // Insert ticket directly (bypass Stripe)
-      const { error } = await supabase
-        .from('live_stream_tickets')
-        .insert({
-          user_id: currentUser.id,
-          live_stream_id: live.id,
-          purchase_price: live.ticket_price,
-          status: 'completed',
-          currency: 'BRL',
-        })
+      // Paid live → Stripe checkout
+      if (!live.stripe_price_id) {
+        toast({ title: t('creator.ticketNotAvailable'), type: 'error' })
+        return
+      }
 
-      if (error) throw error
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData?.session?.access_token
+      if (!token) {
+        toast({ title: t('auth.sessionExpired'), type: 'error' })
+        return
+      }
 
-      toast({ title: t('creator.ticketPurchased'), type: 'success' })
-      setSelectedLive(null)
-      navigate('/purchases?tab=lives')
-    } catch (err) {
+      const appUrl = import.meta.env.VITE_APP_URL || window.location.origin
+
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-stripe-checkout`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            creator_id: live.creator_id,
+            stripe_price_id: live.stripe_price_id,
+            product_id: live.id,
+            product_type: 'live_ticket',
+            success_url: `${appUrl}/lives/${live.id}`,
+            cancel_url: `${appUrl}/creator/${live.creator_id}`,
+          }),
+        }
+      )
+
+      const json = await res.json()
+
+      if (!json.success || !json.checkoutUrl) {
+        throw new Error(json.error || 'Checkout error')
+      }
+
+      window.location.href = json.checkoutUrl
+    } catch (err: any) {
       console.error('[CreatorProfile] Ticket purchase error:', err)
-      toast({ title: t('creator.ticketError'), type: 'error' })
+      toast({ title: err?.message || t('creator.ticketError'), type: 'error' })
     } finally {
       setIsBuyingTicket(false)
     }
@@ -1010,8 +1062,9 @@ export default function CreatorProfilePage() {
       {selectedPack && (
         <PackModal
           pack={selectedPack}
-          onClose={() => setSelectedPack(null)}
+          onClose={() => !isBuyingPack && setSelectedPack(null)}
           onBuy={handleBuyPack}
+          isLoading={isBuyingPack}
         />
       )}
 

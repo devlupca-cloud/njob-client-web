@@ -50,6 +50,7 @@
   },
 
   "auth": {
+    "sessionExpired": "Sesión expirada. Inicia sesión de nuevo.",
     "login": {
       "welcomeBack": "Bienvenido de vuelta",
       "label": "Iniciar sesión",
@@ -280,6 +281,9 @@
     "ticketError": "Error al comprar entrada. Inténtalo de nuevo.",
     "packPurchased": "¡Paquete adquirido con éxito!",
     "packError": "Error al comprar paquete. Inténtalo de nuevo.",
+    "ticketNotAvailable": "Esta entrada aún no está disponible para compra.",
+    "packNotAvailable": "Este paquete aún no está disponible para compra.",
+    "packPurchaseError": "Error al iniciar el pago. Inténtalo de nuevo.",
     "contactWhatsapp": "Contactar",
     "whatsappLabel": "WhatsApp",
     "meetingTitle": "Encuentro presencial",
@@ -502,7 +506,8 @@
     "info": "Información",
     "contentLabel": "Contenido",
     "processing": "Procesando...",
-    "buyFor": "Comprar por"
+    "buyFor": "Comprar por",
+    "purchased": "Comprado"
   },
 
   "notFound": {

@@ -345,7 +345,9 @@ export default function PurchasesPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const { t } = useTranslation()
-  const user = useAuthStore((s) => s.profile)
+  const profile = useAuthStore((s) => s.profile)
+  const session = useAuthStore((s) => s.session)
+  const userId = profile?.id || session?.user?.id
   const initialTab = searchParams.get('tab')
   const [activeTab, setActiveTab] = useState<Tab>(
     initialTab === 'calls' ? 'calls' : initialTab === 'lives' ? 'lives' : 'packs'
@@ -358,9 +360,9 @@ export default function PurchasesPage() {
   ]
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['purchases', user?.id],
-    queryFn: () => fetchPurchases(user!.id),
-    enabled: !!user?.id,
+    queryKey: ['purchases', userId],
+    queryFn: () => fetchPurchases(userId!),
+    enabled: !!userId,
     staleTime: 1000 * 60 * 2,
   })
 
