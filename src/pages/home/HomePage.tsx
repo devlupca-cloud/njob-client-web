@@ -1,6 +1,6 @@
 import { useState, useMemo, useDeferredValue } from 'react'
-import { useQuery, keepPreviousData } from '@tanstack/react-query'
-import { Search, Users } from 'lucide-react'
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
+import { Search, Users, RefreshCw } from 'lucide-react'
 import Logo from '@/components/ui/Logo'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
@@ -39,26 +39,44 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 }
 
 async function fetchCreators(userId?: string): Promise<Creator[]> {
-  // Buscar RPC, is_active e likes do usuário em paralelo (15s timeout)
-  const [rpcRes, profilesRes, likesRes] = await withTimeout(
-    Promise.all([
-      supabase.rpc('get_creators_status'),
+  // Buscar cada query independentemente para evitar que uma falha cancele tudo
+  const [rpcRes, profilesRes, likesRes] = await Promise.all([
+    withTimeout(supabase.rpc('get_creators_status'), 15000),
+    withTimeout(
       supabase.from('profiles').select('id, is_active').eq('role', 'creator'),
-      userId
-        ? supabase.from('content_likes').select('creator_id').eq('client_id', userId)
-        : Promise.resolve({ data: [] as { creator_id: string }[], error: null }),
-    ]),
-    15000,
-  )
+      10000,
+    ).catch((err) => {
+      console.warn('[HomePage] profiles query failed:', err)
+      return { data: null, error: err }
+    }),
+    userId
+      ? withTimeout(
+          supabase.from('content_likes').select('creator_id').eq('client_id', userId),
+          10000,
+        ).catch((err) => {
+          console.warn('[HomePage] likes query failed:', err)
+          return { data: null, error: err }
+        })
+      : Promise.resolve({ data: [] as { creator_id: string }[], error: null }),
+  ])
 
-  if (rpcRes.error) throw rpcRes.error
+  if (rpcRes.error) {
+    console.error('[HomePage] RPC get_creators_status error:', rpcRes.error)
+    throw rpcRes.error
+  }
   const rows = rpcRes.data ?? []
 
+  if (profilesRes.error) {
+    console.warn('[HomePage] profiles query error (using fallback):', profilesRes.error)
+  }
   const activeMap = new Map<string, boolean>()
   for (const p of profilesRes.data ?? []) {
     activeMap.set(p.id, p.is_active ?? false)
   }
 
+  if (likesRes.error) {
+    console.warn('[HomePage] likes query error (using fallback):', likesRes.error)
+  }
   const likedIds = new Set((likesRes.data ?? []).map((l) => l.creator_id))
 
   return rows.map((row: CreatorFromRPC): Creator => {
@@ -190,8 +208,10 @@ export default function HomePage() {
     { key: 'homens', label: t('home.filterMen') },
   ]
 
+  const queryClient = useQueryClient()
+
   const { data: creators, isLoading, isError } = useQuery({
-    queryKey: ['creators'],
+    queryKey: ['creators', currentUser?.id ?? 'anon'],
     queryFn: () => fetchCreators(currentUser?.id),
     staleTime: 1000 * 60 * 2,
     placeholderData: keepPreviousData,
@@ -303,10 +323,17 @@ export default function HomePage() {
 
         {/* Error */}
         {isError && !isLoading && (
-          <div className="flex items-center justify-center py-16 px-8 text-center">
+          <div className="flex flex-col items-center justify-center gap-4 py-16 px-8 text-center">
             <p className="text-sm text-[hsl(var(--muted-foreground))]">
               {t('home.loadError')}
             </p>
+            <button
+              onClick={() => queryClient.invalidateQueries({ queryKey: ['creators'] })}
+              className="flex items-center gap-2 px-4 py-2 rounded-full text-xs font-medium bg-[hsl(var(--primary))] text-white hover:opacity-90 transition-opacity"
+            >
+              <RefreshCw size={14} />
+              {t('home.retry', 'Tentar novamente')}
+            </button>
           </div>
         )}
 
