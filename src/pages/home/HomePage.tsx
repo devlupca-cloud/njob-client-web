@@ -39,45 +39,54 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 }
 
 async function fetchCreators(userId?: string): Promise<Creator[]> {
-  // Buscar cada query independentemente para evitar que uma falha cancele tudo
+  // Executar queries — cada uma com timeout e fallback independente
+  const rpcPromise = withTimeout(
+    Promise.resolve(supabase.rpc('get_creators_status')),
+    15000,
+  )
+  const profilesPromise = withTimeout(
+    Promise.resolve(supabase.from('profiles').select('id, is_active').eq('role', 'creator')),
+    10000,
+  ).catch((err) => {
+    console.warn('[HomePage] profiles query failed:', err)
+    return { data: null as null, error: err }
+  })
+  const likesPromise = userId
+    ? withTimeout(
+        Promise.resolve(supabase.from('content_likes').select('creator_id').eq('client_id', userId)),
+        10000,
+      ).catch((err) => {
+        console.warn('[HomePage] likes query failed:', err)
+        return { data: null as null, error: err }
+      })
+    : Promise.resolve({ data: [] as { creator_id: string }[], error: null })
+
   const [rpcRes, profilesRes, likesRes] = await Promise.all([
-    withTimeout(supabase.rpc('get_creators_status'), 15000),
-    withTimeout(
-      supabase.from('profiles').select('id, is_active').eq('role', 'creator'),
-      10000,
-    ).catch((err) => {
-      console.warn('[HomePage] profiles query failed:', err)
-      return { data: null, error: err }
-    }),
-    userId
-      ? withTimeout(
-          supabase.from('content_likes').select('creator_id').eq('client_id', userId),
-          10000,
-        ).catch((err) => {
-          console.warn('[HomePage] likes query failed:', err)
-          return { data: null, error: err }
-        })
-      : Promise.resolve({ data: [] as { creator_id: string }[], error: null }),
+    rpcPromise,
+    profilesPromise,
+    likesPromise,
   ])
 
   if (rpcRes.error) {
     console.error('[HomePage] RPC get_creators_status error:', rpcRes.error)
     throw rpcRes.error
   }
-  const rows = rpcRes.data ?? []
+  const rows = (rpcRes.data ?? []) as CreatorFromRPC[]
 
   if (profilesRes.error) {
     console.warn('[HomePage] profiles query error (using fallback):', profilesRes.error)
   }
   const activeMap = new Map<string, boolean>()
-  for (const p of profilesRes.data ?? []) {
+  for (const p of (profilesRes.data ?? []) as { id: string; is_active: boolean | null }[]) {
     activeMap.set(p.id, p.is_active ?? false)
   }
 
   if (likesRes.error) {
     console.warn('[HomePage] likes query error (using fallback):', likesRes.error)
   }
-  const likedIds = new Set((likesRes.data ?? []).map((l) => l.creator_id))
+  const likedIds = new Set(
+    ((likesRes.data ?? []) as { creator_id: string }[]).map((l) => l.creator_id),
+  )
 
   return rows.map((row: CreatorFromRPC): Creator => {
     // Se a RPC diz "em live", manter; senão usar is_active do profiles
