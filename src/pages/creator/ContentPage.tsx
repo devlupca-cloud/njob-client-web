@@ -582,11 +582,6 @@ export default function ContentPage() {
       toast({ title: t('auth.sessionExpired'), type: 'error' })
       return
     }
-    if (!pack.stripe_price_id) {
-      toast({ title: t('creator.packNotAvailable'), type: 'error' })
-      return
-    }
-
     setIsBuyingPack(true)
     try {
       const { data: sessionData } = await supabase.auth.getSession()

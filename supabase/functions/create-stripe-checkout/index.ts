@@ -70,10 +70,10 @@ serve(async (req) => {
       );
     }
 
-    // Para tipos que NÃO são video-call, stripe_price_id continua obrigatório
-    if (product_type !== "video-call" && !stripe_price_id) {
+    // stripe_price_id é obrigatório exceto para video-call e pack (criado on-the-fly)
+    if (product_type !== "video-call" && product_type !== "pack" && !stripe_price_id) {
       throw new Error(
-        "stripe_price_id é obrigatório para product_type diferente de 'video-call'.",
+        "stripe_price_id é obrigatório para product_type diferente de 'video-call' e 'pack'.",
       );
     }
 
@@ -229,6 +229,51 @@ serve(async (req) => {
           quantity: 1,
         },
       ];
+    } else if (product_type === "pack" && !stripe_price_id) {
+      // Pack sem stripe_price_id — criar produto/preço no Stripe on-the-fly
+      const { data: packRow, error: packErr } = await supabaseAdmin
+        .from("packs")
+        .select("title, price, cover_image_url")
+        .eq("id", product_id)
+        .single();
+
+      if (packErr || !packRow) {
+        throw new Error("Pack não encontrado no banco de dados.");
+      }
+
+      if (!packRow.price || Number(packRow.price) <= 0) {
+        throw new Error("Pack com preço inválido.");
+      }
+
+      const product = await stripe.products.create(
+        {
+          name: packRow.title || "Pacote de conteúdo",
+          images: packRow.cover_image_url ? [packRow.cover_image_url] : [],
+          metadata: { supabase_pack_id: product_id, creator_id: creator_id },
+        },
+        { stripeAccount: stripeAccountId },
+      );
+
+      const newPrice = await stripe.prices.create(
+        {
+          product: product.id,
+          unit_amount: Math.round(Number(packRow.price) * 100),
+          currency: "brl",
+        },
+        { stripeAccount: stripeAccountId },
+      );
+
+      // Atualizar pack no banco para futuras compras
+      await supabaseAdmin
+        .from("packs")
+        .update({
+          stripe_product_id: product.id,
+          stripe_price_id: newPrice.id,
+        })
+        .eq("id", product_id);
+
+      priceInCents = newPrice.unit_amount!;
+      lineItems = [{ price: newPrice.id, quantity: 1 }];
     } else {
       // Fluxo original: usa price já criado no Stripe
       const priceObject = await stripe.prices.retrieve(stripe_price_id!, {
