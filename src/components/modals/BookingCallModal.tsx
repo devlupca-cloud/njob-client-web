@@ -1,6 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import {
   X,
   Video,
@@ -139,9 +138,7 @@ export default function BookingCallModal({
   avatarUrl,
 }: BookingCallModalProps) {
   const { t } = useTranslation()
-  const navigate = useNavigate()
-  const { user } = useAuthStore()
-  const queryClient = useQueryClient()
+  const { user, session } = useAuthStore()
 
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlot | null>(null)
@@ -164,48 +161,51 @@ export default function BookingCallModal({
     : 0
 
   const handleCheckout = async () => {
-    if (!user?.id || !creatorId || !selectedSlot || !selectedDate) return
+    const userId = user?.id || session?.user?.id
+    if (!userId || !creatorId || !selectedSlot || !selectedDate) return
 
     setIsCheckingOut(true)
     setError(null)
 
     try {
-      // 1. Mark slot as purchased atomically via RPC
-      const { error: slotError } = await supabase
-        .rpc('book_availability_slot', { p_slot_id: selectedSlot.id })
-
-      if (slotError) {
-        queryClient.invalidateQueries({ queryKey: ['call-availability-modal', creatorId] })
-        setSelectedSlot(null)
-        setError(t('booking.slotTaken'))
-        setIsCheckingOut(false)
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData?.session?.access_token
+      if (!token) {
+        setError(t('auth.sessionExpired'))
         return
       }
 
-      // 2. Insert one_on_one_calls
-      const { error: callError } = await supabase
-        .from('one_on_one_calls')
-        .insert({
-          user_id: user.id,
-          creator_id: creatorId,
-          availability_slot_id: selectedSlot.id,
-          scheduled_start_time: new Date(`${selectedDate}T${selectedSlot.slot_time}`).toISOString(),
-          scheduled_duration_minutes: duration,
-          call_price: price,
-          currency: 'BRL',
-          status: 'confirmed',
-        })
+      const appUrl = import.meta.env.VITE_APP_URL || window.location.origin
 
-      if (callError) {
-        await supabase.rpc('unbook_availability_slot', { p_slot_id: selectedSlot.id })
-        throw callError
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-stripe-checkout`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            creator_id: creatorId,
+            product_id: selectedSlot.id,
+            product_type: 'video-call',
+            duration,
+            success_url: `${appUrl}/purchases?tab=calls`,
+            cancel_url: `${appUrl}/creator/${creatorId}`,
+          }),
+        }
+      )
+
+      const json = await res.json()
+
+      if (!json.success || !json.checkoutUrl) {
+        throw new Error(json.error || 'Checkout error')
       }
 
-      onClose()
-      navigate('/purchases?tab=calls')
-    } catch (err) {
+      window.location.href = json.checkoutUrl
+    } catch (err: any) {
       console.error('[BookingCallModal] Checkout error:', err)
-      setError(t('booking.error'))
+      setError(err?.message || t('booking.error'))
     } finally {
       setIsCheckingOut(false)
     }
@@ -379,7 +379,7 @@ export default function BookingCallModal({
           <div className="px-5 py-4 border-t border-[hsl(var(--border))]">
             <button
               onClick={handleCheckout}
-              disabled={isCheckingOut || !user?.id}
+              disabled={isCheckingOut || !(user?.id || session?.user?.id)}
               className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-[hsl(var(--primary))] text-white font-semibold text-sm hover:opacity-90 active:scale-[0.98] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {isCheckingOut ? (

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import {
   ArrowLeft,
   Video,
@@ -140,8 +140,7 @@ export default function NewCallPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const creatorId = searchParams.get('creatorId')
-  const { user } = useAuthStore()
-  const queryClient = useQueryClient()
+  const { user, session } = useAuthStore()
 
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlot | null>(null)
@@ -164,58 +163,51 @@ export default function NewCallPage() {
     : 0
 
   const handleCheckout = async () => {
-    if (!user?.id || !creatorId || !selectedSlot || !selectedDate) return
+    const userId = user?.id || session?.user?.id
+    if (!userId || !creatorId || !selectedSlot || !selectedDate) return
 
     setIsCheckingOut(true)
     setError(null)
 
     try {
-      // 1. Mark slot as purchased atomically (purchased can be null or false)
-      const { data: updatedSlot, error: slotError } = await supabase
-        .from('creator_availability_slots')
-        .update({ purchased: true })
-        .eq('id', selectedSlot.id)
-        .not('purchased', 'eq', true)
-        .select('id')
-        .single()
-
-      if (slotError || !updatedSlot) {
-        // Slot already purchased by someone else
-        queryClient.invalidateQueries({ queryKey: ['call-availability', creatorId] })
-        setSelectedSlot(null)
-        setError('Este horário já foi reservado. Selecione outro.')
-        setIsCheckingOut(false)
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData?.session?.access_token
+      if (!token) {
+        setError('Sessão expirada. Faça login novamente.')
         return
       }
 
-      // 2. Insert one_on_one_calls
-      const { error: callError } = await supabase
-        .from('one_on_one_calls')
-        .insert({
-          user_id: user.id,
-          creator_id: creatorId,
-          availability_slot_id: selectedSlot.id,
-          scheduled_start_time: new Date(`${selectedDate}T${selectedSlot.slot_time}`).toISOString(),
-          scheduled_duration_minutes: duration,
-          call_price: price,
-          currency: 'BRL',
-          status: 'confirmed',
-        })
+      const appUrl = import.meta.env.VITE_APP_URL || window.location.origin
 
-      if (callError) {
-        // Rollback: unmark slot
-        await supabase
-          .from('creator_availability_slots')
-          .update({ purchased: false })
-          .eq('id', selectedSlot.id)
-        throw callError
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-stripe-checkout`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            creator_id: creatorId,
+            product_id: selectedSlot.id,
+            product_type: 'video-call',
+            duration,
+            success_url: `${appUrl}/purchases?tab=calls`,
+            cancel_url: `${appUrl}/calls/new?creatorId=${creatorId}`,
+          }),
+        }
+      )
+
+      const json = await res.json()
+
+      if (!json.success || !json.checkoutUrl) {
+        throw new Error(json.error || 'Checkout error')
       }
 
-      // 3. Success → navigate to purchases
-      navigate('/purchases')
-    } catch (err) {
+      window.location.href = json.checkoutUrl
+    } catch (err: any) {
       console.error('[NewCallPage] Checkout error:', err)
-      setError('Erro ao agendar chamada. Tente novamente.')
+      setError(err?.message || 'Erro ao agendar chamada. Tente novamente.')
     } finally {
       setIsCheckingOut(false)
     }
@@ -384,7 +376,7 @@ export default function NewCallPage() {
             <div className="sticky bottom-4 pt-2">
               <button
                 onClick={handleCheckout}
-                disabled={isCheckingOut || !user?.id}
+                disabled={isCheckingOut || !(user?.id || session?.user?.id)}
                 className="
                   w-full flex items-center justify-center gap-2 py-3.5 rounded-xl
                   bg-[hsl(var(--primary))] text-white font-semibold text-sm

@@ -559,6 +559,7 @@ export default function CreatorProfilePage() {
   const [showAllPhotos, setShowAllPhotos] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
   const [isBuyingTicket, setIsBuyingTicket] = useState(false)
+  const [isBuyingPack, setIsBuyingPack] = useState(false)
   const [showMeetingModal, setShowMeetingModal] = useState(false)
   const [showBookingModal, setShowBookingModal] = useState(false)
 
@@ -626,8 +627,6 @@ export default function CreatorProfilePage() {
   const handleViewContent = () => {
     navigate(`/creator/${creator.id}/content`)
   }
-
-  const [isBuyingPack, setIsBuyingPack] = useState(false)
 
   const handleBuyPack = async (pack: PackInfo) => {
     const userId = currentUser?.id || session?.user?.id
