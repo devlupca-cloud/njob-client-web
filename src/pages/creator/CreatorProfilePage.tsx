@@ -113,7 +113,7 @@ async function fetchCreatorProfile(
   userId: string | undefined
 ): Promise<CreatorProfileData> {
   // Fetch tudo em paralelo (RPC + queries não dependem entre si)
-  const [rpcRes, packsRes, livesRes, subscribersRes, isSubscribedRes, profileRes, availabilityRes] = await Promise.all([
+  const [rpcRes, packsRes, livesRes, subscribersRes, isSubscribedRes, profileRes, availabilityRes, purchasedPacksRes] = await Promise.all([
     supabase.rpc('get_creator_details', {
       p_profile_id: profileId,
       p_client_id: userId ?? '00000000-0000-0000-0000-000000000000',
@@ -154,6 +154,14 @@ async function fetchCreatorProfile(
       .select('id', { count: 'exact', head: true })
       .eq('creator_id', profileId)
       .gte('availability_date', new Date().toISOString().split('T')[0]),
+    // Check which packs the user already purchased
+    userId
+      ? supabase
+          .from('pack_purchases')
+          .select('pack_id')
+          .eq('user_id', userId)
+          .eq('status', 'completed')
+      : Promise.resolve({ data: [] as { pack_id: string }[], error: null }),
   ])
 
   if (rpcRes.error) {
@@ -171,6 +179,10 @@ async function fetchCreatorProfile(
   if (livesRes.error) console.error('[CreatorProfile] Lives error:', livesRes.error)
   if (subscribersRes.error) console.error('[CreatorProfile] Subscribers error:', subscribersRes.error)
 
+  const purchasedPackIds = new Set(
+    ((purchasedPacksRes.data ?? []) as { pack_id: string }[]).map((p) => p.pack_id),
+  )
+
   const packs: PackInfo[] = (packsRes.data ?? [] as PackRPCRow[]).map((p: PackRPCRow) => ({
     id: p.id,
     title: p.title,
@@ -179,6 +191,7 @@ async function fetchCreatorProfile(
     items_count: p.pack_items?.length ?? 0,
     stripe_price_id: p.stripe_price_id ?? null,
     creator_id: profileId,
+    purchased: purchasedPackIds.has(p.id),
   }))
 
   const lives: LiveStream[] = (livesRes.data ?? []) as LiveStream[]
@@ -921,7 +934,15 @@ export default function CreatorProfilePage() {
               <CardPack
                 key={pack.id}
                 pack={pack}
-                onView={(p) => { if (!guardGuestAction()) setSelectedPack(p) }}
+                onView={(p) => {
+                  if (!guardGuestAction()) {
+                    if (p.purchased) {
+                      navigate(`/creator/${profileId}/content`)
+                    } else {
+                      setSelectedPack(p)
+                    }
+                  }
+                }}
               />
             ))}
           </div>

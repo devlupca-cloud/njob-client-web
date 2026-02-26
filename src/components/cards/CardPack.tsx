@@ -1,6 +1,7 @@
-import { Package, ChevronRight } from 'lucide-react'
+import { Package, ChevronRight, Check } from 'lucide-react'
 import type { PackInfo } from '@/types'
 import { formatCurrency } from '@/lib/utils'
+import { useTranslation } from 'react-i18next'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -27,7 +28,8 @@ export function CardPackSkeleton() {
 // ─── Card ─────────────────────────────────────────────────────────────────────
 
 export default function CardPack({ pack, onView }: CardPackProps) {
-  const { title, price, cover_url, items_count } = pack
+  const { t } = useTranslation()
+  const { title, price, cover_url, items_count, purchased } = pack
 
   return (
     <article
@@ -57,8 +59,8 @@ export default function CardPack({ pack, onView }: CardPackProps) {
 
         {/* Price badge */}
         <div className="absolute bottom-2 right-2">
-          <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-[hsl(var(--primary))] text-white shadow-md">
-            {formatCurrency(price)}
+          <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold text-white shadow-md ${purchased ? 'bg-green-600' : 'bg-[hsl(var(--primary))]'}`}>
+            {purchased ? t('creator.purchased', 'Comprado') : formatCurrency(price)}
           </span>
         </div>
       </div>
@@ -78,16 +80,28 @@ export default function CardPack({ pack, onView }: CardPackProps) {
         {/* CTA button */}
         <button
           onClick={() => onView(pack)}
-          className="
+          className={`
             flex items-center justify-center gap-1.5
             w-full py-1.5 rounded-lg text-xs font-semibold
-            bg-[hsl(var(--primary))] text-white
             hover:opacity-90 active:scale-[0.97]
             transition-all duration-150
-          "
+            ${purchased
+              ? 'bg-green-600 text-white'
+              : 'bg-[hsl(var(--primary))] text-white'
+            }
+          `}
         >
-          Ver pacote
-          <ChevronRight size={13} />
+          {purchased ? (
+            <>
+              <Check size={13} />
+              {t('creator.accessPack', 'Acessar')}
+            </>
+          ) : (
+            <>
+              {t('creator.viewPack', 'Ver pacote')}
+              <ChevronRight size={13} />
+            </>
+          )}
         </button>
       </div>
     </article>

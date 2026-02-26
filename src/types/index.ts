@@ -128,6 +128,7 @@ export interface PackInfo {
   items_count: number
   stripe_price_id: string | null
   creator_id: string
+  purchased?: boolean
 }
 
 // ─── Coupons ─────────────────────────────────────────────────────────────────
