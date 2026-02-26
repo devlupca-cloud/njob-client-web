@@ -639,7 +639,7 @@ export default function CreatorProfilePage() {
         return
       }
 
-      const appUrl = import.meta.env.VITE_APP_URL || window.location.origin
+      const appUrl = (import.meta.env.VITE_APP_URL || window.location.origin).trim()
 
       const res = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-stripe-checkout`,
@@ -718,7 +718,7 @@ export default function CreatorProfilePage() {
         return
       }
 
-      const appUrl = import.meta.env.VITE_APP_URL || window.location.origin
+      const appUrl = (import.meta.env.VITE_APP_URL || window.location.origin).trim()
 
       const res = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-stripe-checkout`,
