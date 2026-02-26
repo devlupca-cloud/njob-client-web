@@ -170,12 +170,12 @@ export default function NewCallPage() {
     setError(null)
 
     try {
-      // 1. Mark slot as purchased atomically (prevent race condition)
+      // 1. Mark slot as purchased atomically (purchased can be null or false)
       const { data: updatedSlot, error: slotError } = await supabase
         .from('creator_availability_slots')
         .update({ purchased: true })
         .eq('id', selectedSlot.id)
-        .eq('purchased', false)
+        .not('purchased', 'eq', true)
         .select('id')
         .single()
 
@@ -195,7 +195,7 @@ export default function NewCallPage() {
           user_id: user.id,
           creator_id: creatorId,
           availability_slot_id: selectedSlot.id,
-          scheduled_start_time: `${selectedDate}T${selectedSlot.slot_time}`,
+          scheduled_start_time: new Date(`${selectedDate}T${selectedSlot.slot_time}`).toISOString(),
           scheduled_duration_minutes: duration,
           call_price: price,
           currency: 'BRL',

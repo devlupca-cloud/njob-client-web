@@ -278,10 +278,13 @@
     "checkoutError": "Failed to create checkout. Please try again.",
     "ticketPurchased": "Ticket purchased successfully!",
     "ticketError": "Failed to purchase ticket. Please try again.",
+    "packPurchased": "Pack purchased successfully!",
+    "packError": "Failed to purchase pack. Please try again.",
     "contactWhatsapp": "Get in touch",
     "whatsappLabel": "WhatsApp",
     "meetingTitle": "In-person meeting",
-    "noWhatsapp": "WhatsApp not available"
+    "noWhatsapp": "WhatsApp not available",
+    "liveTicketAction": "Live Ticket"
   },
 
   "chat": {
@@ -453,6 +456,22 @@
     "removeFavorite": "Remove from favorites",
     "addFavorite": "Add to favorites",
     "liveTag": "LIVE"
+  },
+
+  "booking": {
+    "duration": "Duration",
+    "availableDate": "Available date",
+    "time": "Time",
+    "noSlots": "No time slots available at the moment.",
+    "slot": "slot",
+    "slots": "slots",
+    "bookFor": "Book for",
+    "bookFree": "Book for free",
+    "processing": "Processing...",
+    "at": "at",
+    "slotTaken": "This slot has already been booked. Please select another.",
+    "slotPast": "This time has already passed. Choose a future time.",
+    "error": "Error booking call. Please try again."
   },
 
   "callRoom": {

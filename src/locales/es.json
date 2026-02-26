@@ -278,10 +278,13 @@
     "checkoutError": "Error al crear checkout. Inténtalo de nuevo.",
     "ticketPurchased": "¡Entrada adquirida con éxito!",
     "ticketError": "Error al comprar entrada. Inténtalo de nuevo.",
+    "packPurchased": "¡Paquete adquirido con éxito!",
+    "packError": "Error al comprar paquete. Inténtalo de nuevo.",
     "contactWhatsapp": "Contactar",
     "whatsappLabel": "WhatsApp",
     "meetingTitle": "Encuentro presencial",
-    "noWhatsapp": "WhatsApp no disponible"
+    "noWhatsapp": "WhatsApp no disponible",
+    "liveTicketAction": "Entrada para la Live"
   },
 
   "chat": {
@@ -453,6 +456,22 @@
     "removeFavorite": "Quitar de favoritos",
     "addFavorite": "Agregar a favoritos",
     "liveTag": "EN VIVO"
+  },
+
+  "booking": {
+    "duration": "Duración",
+    "availableDate": "Fecha disponible",
+    "time": "Horario",
+    "noSlots": "No hay horarios disponibles en este momento.",
+    "slot": "horario",
+    "slots": "horarios",
+    "bookFor": "Agendar por",
+    "bookFree": "Agendar gratis",
+    "processing": "Procesando...",
+    "at": "a las",
+    "slotTaken": "Este horario ya fue reservado. Selecciona otro.",
+    "slotPast": "Este horario ya pasó. Elige un horario futuro.",
+    "error": "Error al agendar llamada. Inténtalo de nuevo."
   },
 
   "callRoom": {

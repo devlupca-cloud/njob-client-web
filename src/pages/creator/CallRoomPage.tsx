@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { ArrowLeft, Video, Loader2, ShieldAlert, Clock } from 'lucide-react'
+import { ArrowLeft, Video, Loader2, ShieldAlert } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { generateToken, ZegoUIKitPrebuilt } from '@/lib/zegocloud'
@@ -58,21 +58,11 @@ function formatDateTime(dateStr: string): string {
   })
 }
 
-function getEarlyEntryTime(scheduledStartTime: string): string {
-  return new Date(
-    new Date(scheduledStartTime).getTime() - 5 * 60 * 1000
-  ).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-}
-
-function getCallWindow(call: CallInfo): 'early' | 'open' | 'ended' {
+function getCallWindow(call: CallInfo): 'open' | 'ended' {
   const now = Date.now()
   const start = new Date(call.scheduled_start_time).getTime()
   const end = start + call.scheduled_duration_minutes * 60 * 1000
 
-  // Permite entrar 5 minutos antes
-  const earlyEntry = start - 5 * 60 * 1000
-
-  if (now < earlyEntry) return 'early'
   if (now > end) return 'ended'
   return 'open'
 }
@@ -169,29 +159,6 @@ export default function CallRoomPage() {
               >
                 {t('callRoom.goToPurchases')}
               </button>
-            </div>
-          </main>
-        </div>
-      )}
-
-      {/* Too early overlay */}
-      {callWindow === 'early' && call && (
-        <div className="fixed inset-0 z-[60] bg-[hsl(var(--background))] flex flex-col min-h-screen">
-          <Header onBack={() => navigate(-1)} />
-          <main className="flex-1 flex items-center justify-center px-8">
-            <div className="text-center max-w-xs">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-blue-500/10 flex items-center justify-center">
-                <Clock size={28} className="text-blue-400" />
-              </div>
-              <p className="text-sm font-medium text-[hsl(var(--foreground))] mb-1">
-                {t('callRoom.callWith', { creatorName: call.creator_name })}
-              </p>
-              <p className="text-xs text-[hsl(var(--muted-foreground))] mb-4">
-                {formatDateTime(call.scheduled_start_time)} · {call.scheduled_duration_minutes} min
-              </p>
-              <p className="text-xs text-blue-400 bg-blue-500/10 rounded-xl px-4 py-2">
-                {t('callRoom.roomOpensEarly', { time: getEarlyEntryTime(call.scheduled_start_time) })}
-              </p>
             </div>
           </main>
         </div>

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import {
@@ -343,9 +343,13 @@ function CallList({ calls, onTap }: { calls: CallPurchase[]; onTap: (callId: str
 
 export default function PurchasesPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { t } = useTranslation()
   const user = useAuthStore((s) => s.profile)
-  const [activeTab, setActiveTab] = useState<Tab>('packs')
+  const initialTab = searchParams.get('tab')
+  const [activeTab, setActiveTab] = useState<Tab>(
+    initialTab === 'calls' ? 'calls' : initialTab === 'lives' ? 'lives' : 'packs'
+  )
 
   const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
     { key: 'packs', label: t('purchases.tabs.packs'), icon: <Package size={14} /> },

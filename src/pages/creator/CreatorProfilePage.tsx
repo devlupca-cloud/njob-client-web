@@ -7,7 +7,6 @@ import {
   Heart,
   MessageCircle,
   Radio,
-  Video,
   MapPin,
   Package,
   Calendar,
@@ -18,12 +17,16 @@ import {
   Ticket,
   DollarSign,
   Loader2,
+  Video,
+  Monitor,
+  Sparkles,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { useGuestGuard } from '@/components/ui/GuestModal'
 import { useToast } from '@/components/ui/Toast'
 import CardPack from '@/components/cards/CardPack'
+import BookingCallModal from '@/components/modals/BookingCallModal'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { Creator, PackInfo, LiveStream } from '@/types'
 
@@ -110,7 +113,7 @@ async function fetchCreatorProfile(
   userId: string | undefined
 ): Promise<CreatorProfileData> {
   // Fetch tudo em paralelo (RPC + queries não dependem entre si)
-  const [rpcRes, packsRes, livesRes, subscribersRes, isSubscribedRes, profileRes] = await Promise.all([
+  const [rpcRes, packsRes, livesRes, subscribersRes, isSubscribedRes, profileRes, availabilityRes] = await Promise.all([
     supabase.rpc('get_creator_details', {
       p_profile_id: profileId,
       p_client_id: userId ?? '00000000-0000-0000-0000-000000000000',
@@ -145,6 +148,12 @@ async function fetchCreatorProfile(
       .select('*')
       .eq('id', profileId)
       .single(),
+    // Check if creator has any future availability (used to show video call button)
+    supabase
+      .from('creator_availability')
+      .select('id', { count: 'exact', head: true })
+      .eq('creator_id', profileId)
+      .gte('availability_date', new Date().toISOString().split('T')[0]),
   ])
 
   if (rpcRes.error) {
@@ -205,7 +214,7 @@ async function fetchCreatorProfile(
     faz_encontro_presencial: d.faz_encontro_presencial ?? false,
     valor_1_hora: d.valor_1_hora ?? 0,
     valor_30_min: d.valor_30_min ?? 0,
-    faz_chamada_video: d.faz_chamada_video ?? false,
+    faz_chamada_video: (d.faz_chamada_video ?? false) || (availabilityRes.count ?? 0) > 0,
     genero: d.genero ?? null,
     descricao: desc
       ? {
@@ -319,63 +328,6 @@ function LiveInfoModal({
             <Ticket size={18} />
           )}
           {live.status === 'live' ? t('creator.joinLive') : t('creator.buyTicket')}
-        </button>
-      </div>
-    </div>
-  )
-}
-
-// ─── Call Modal ───────────────────────────────────────────────────────────────
-
-function CallModal({
-  onClose,
-  onCall,
-}: {
-  onClose: () => void
-  onCall: () => void
-}) {
-  const { t } = useTranslation()
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-md rounded-2xl bg-[hsl(var(--card))] border border-[hsl(var(--border))] p-6 max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex justify-end mb-2">
-          <button onClick={onClose} className="p-1 rounded-full hover:bg-[hsl(var(--secondary))]">
-            <X size={20} className="text-[hsl(var(--foreground))]" />
-          </button>
-        </div>
-
-        <h2 className="text-lg font-bold text-[hsl(var(--foreground))] text-center mb-4">
-          {t('creator.videoCall')}
-        </h2>
-
-        <div className="flex items-start gap-2 p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 mb-4">
-          <Phone size={16} className="text-blue-400 mt-0.5 shrink-0" />
-          <p className="text-xs text-blue-400">
-            {t('creator.videoCallDisclaimer')}
-          </p>
-        </div>
-
-        <p className="text-sm text-[hsl(var(--muted-foreground))] mb-8">
-          {t('creator.videoCallOnline')}
-        </p>
-
-        <button
-          onClick={onCall}
-          className="
-            w-full flex items-center justify-center gap-2 py-3 rounded-xl
-            bg-emerald-600 text-white font-semibold text-sm
-            hover:opacity-90 active:scale-[0.98] transition-all duration-150
-          "
-        >
-          <Video size={18} />
-          {t('creator.callNow')}
         </button>
       </div>
     </div>
@@ -595,12 +547,12 @@ export default function CreatorProfilePage() {
   const { t } = useTranslation()
 
   const [selectedLive, setSelectedLive] = useState<LiveStream | null>(null)
-  const [showCallModal, setShowCallModal] = useState(false)
   const [selectedPack, setSelectedPack] = useState<PackInfo | null>(null)
   const [showAllPhotos, setShowAllPhotos] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
   const [isBuyingTicket, setIsBuyingTicket] = useState(false)
   const [showMeetingModal, setShowMeetingModal] = useState(false)
+  const [showBookingModal, setShowBookingModal] = useState(false)
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['creator-profile', profileId],
@@ -667,10 +619,47 @@ export default function CreatorProfilePage() {
     navigate(`/creator/${creator.id}/content`)
   }
 
-  // STRIPE_DISABLED: Pack purchase temporarily disabled
-  const handleBuyPack = async (_pack: PackInfo) => {
-    setSelectedPack(null)
-    toast({ title: t('payments.addCard.comingSoon'), type: 'info' })
+  const handleBuyPack = async (pack: PackInfo) => {
+    if (!currentUser?.id) return
+
+    setIsBuyingTicket(true)
+    try {
+      // Check if user already purchased this pack
+      const { count } = await supabase
+        .from('pack_purchases')
+        .select('id', { count: 'exact', head: true })
+        .eq('pack_id', pack.id)
+        .eq('user_id', currentUser.id)
+        .eq('status', 'completed')
+
+      if ((count ?? 0) > 0) {
+        setSelectedPack(null)
+        navigate(`/creator/${creator.id}/content`)
+        return
+      }
+
+      // Insert purchase directly (bypass Stripe)
+      const { error } = await supabase
+        .from('pack_purchases')
+        .insert({
+          user_id: currentUser.id,
+          pack_id: pack.id,
+          purchase_price: pack.price,
+          status: 'completed',
+          currency: 'BRL',
+        })
+
+      if (error) throw error
+
+      toast({ title: t('creator.packPurchased'), type: 'success' })
+      setSelectedPack(null)
+      navigate('/purchases?tab=packs')
+    } catch (err) {
+      console.error('[CreatorProfile] Pack purchase error:', err)
+      toast({ title: t('creator.packError'), type: 'error' })
+    } finally {
+      setIsBuyingTicket(false)
+    }
   }
 
   const handleEnterLive = async (live: LiveStream) => {
@@ -714,18 +703,13 @@ export default function CreatorProfilePage() {
 
       toast({ title: t('creator.ticketPurchased'), type: 'success' })
       setSelectedLive(null)
-      navigate(`/lives/${live.id}`)
+      navigate('/purchases?tab=lives')
     } catch (err) {
       console.error('[CreatorProfile] Ticket purchase error:', err)
       toast({ title: t('creator.ticketError'), type: 'error' })
     } finally {
       setIsBuyingTicket(false)
     }
-  }
-
-  const handleCall = () => {
-    setShowCallModal(false)
-    navigate(`/calls/new?creatorId=${creator.id}`)
   }
 
   return (
@@ -838,49 +822,46 @@ export default function CreatorProfilePage() {
         </div>
       </div>
 
-      {/* ── Capabilities ─────────────────────────────────────────────────────── */}
-      {(creator.faz_chamada_video || creator.faz_encontro_presencial) && (
+      {/* ── Action Buttons (Capabilities) ─────────────────────────────────── */}
+      {(creator.faz_chamada_video || creator.faz_encontro_presencial || scheduledLives.length > 0 || activeLive) && (
         <div className="px-4 mb-5 max-w-4xl mx-auto w-full">
-          <div className="flex flex-col gap-2">
-            {/* Vende conteúdo — hidden until content sales flow is ready */}
-
+          <div className="flex flex-col gap-2.5">
+            {/* Chamada Individual — primary CTA (abre modal de booking) */}
             {creator.faz_chamada_video && (
               <button
-                onClick={() => { if (!guardGuestAction()) setShowCallModal(true) }}
-                className="flex items-center justify-between px-4 py-3 rounded-xl bg-[hsl(var(--card))] border border-[hsl(var(--border))]"
+                onClick={() => { if (!guardGuestAction()) setShowBookingModal(true) }}
+                className="flex items-center justify-center gap-3 w-full px-5 py-3.5 rounded-xl border-none"
+                style={{ background: 'hsl(var(--primary))', color: '#fff' }}
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-emerald-500/12 flex items-center justify-center">
-                    <Video size={18} className="text-emerald-400" />
-                  </div>
-                  <div className="text-left">
-                    <p className="text-sm font-medium text-[hsl(var(--foreground))]">{t('creator.videoCallLabel')}</p>
-                    <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                      {creator.valor_30_min > 0 ? `${t('creator.startingAt')} ${formatCurrency(creator.valor_30_min)}${t('creator.per30min')}` : t('creator.availableNow')}
-                    </p>
-                  </div>
-                </div>
-                <ChevronRight size={16} className="text-[hsl(var(--muted-foreground))]" />
+                <Video size={18} />
+                <span className="text-sm font-semibold">{t('creator.videoCall')}</span>
               </button>
             )}
 
+            {/* Encontro Presencial */}
             {creator.faz_encontro_presencial && (
               <button
                 onClick={() => { if (!guardGuestAction()) setShowMeetingModal(true) }}
-                className="flex items-center justify-between px-4 py-3 rounded-xl bg-[hsl(var(--card))] border border-[hsl(var(--border))] w-full"
+                className="flex items-center justify-center gap-3 w-full px-5 py-3.5 rounded-xl bg-[hsl(var(--card))] border border-[hsl(var(--border))]"
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-amber-500/12 flex items-center justify-center">
-                    <MapPin size={18} className="text-amber-400" />
-                  </div>
-                  <div className="text-left">
-                    <p className="text-sm font-medium text-[hsl(var(--foreground))]">{t('creator.inPersonMeeting')}</p>
-                    <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                      {creator.valor_1_hora > 0 ? `${formatCurrency(creator.valor_1_hora)}${t('creator.perHour')}` : t('creator.onDemand')}
-                    </p>
-                  </div>
-                </div>
-                <ChevronRight size={16} className="text-[hsl(var(--muted-foreground))]" />
+                <Sparkles size={18} className="text-[hsl(var(--foreground))]" />
+                <span className="text-sm font-semibold text-[hsl(var(--foreground))]">{t('creator.inPersonMeeting')}</span>
+              </button>
+            )}
+
+            {/* Ingresso para a Live */}
+            {(scheduledLives.length > 0 || activeLive) && (
+              <button
+                onClick={() => {
+                  if (!guardGuestAction()) {
+                    if (activeLive) { setSelectedLive(activeLive) }
+                    else if (scheduledLives.length > 0) { setSelectedLive(scheduledLives[0]) }
+                  }
+                }}
+                className="flex items-center justify-center gap-3 w-full px-5 py-3.5 rounded-xl bg-[hsl(var(--card))] border border-[hsl(var(--border))]"
+              >
+                <Monitor size={18} className="text-[hsl(var(--foreground))]" />
+                <span className="text-sm font-semibold text-[hsl(var(--foreground))]">{t('creator.liveTicketAction')}</span>
               </button>
             )}
           </div>
@@ -889,17 +870,9 @@ export default function CreatorProfilePage() {
 
       {/* ── Packs section ────────────────────────────────────────────────────── */}
       {packs.length > 0 && (
-        <div className="mb-6 max-w-4xl mx-auto w-full">
+        <div id="section-packs" className="mb-6 max-w-4xl mx-auto w-full">
           <div className="flex items-center justify-between px-4 mb-3">
             <h2 className="text-base font-bold text-[hsl(var(--foreground))]">{t('creator.packs')}</h2>
-            {packs.length > 3 && (
-              <button
-                onClick={() => { if (!guardGuestAction()) handleViewContent() }}
-                className="text-xs text-[hsl(var(--primary))] font-medium"
-              >
-                {t('common.seeAll')}
-              </button>
-            )}
           </div>
           <div className="flex gap-3 overflow-x-auto scrollbar-none px-4 pb-1 md:grid md:grid-cols-3 md:overflow-x-visible">
             {packs.map((pack) => (
@@ -1017,14 +990,6 @@ export default function CreatorProfilePage() {
               </div>
             ))}
           </div>
-          {creator.vende_conteudo && (
-            <button
-              onClick={() => { if (!guardGuestAction()) handleViewContent() }}
-              className="mt-2 w-full py-2.5 rounded-xl border border-[hsl(var(--border))] text-sm font-medium text-[hsl(var(--primary))] hover:bg-[hsl(var(--secondary))] transition-colors"
-            >
-              {t('creator.seeAllContent')}
-            </button>
-          )}
         </div>
       )}
 
@@ -1039,13 +1004,6 @@ export default function CreatorProfilePage() {
           onClose={() => setSelectedLive(null)}
           onEnter={() => handleEnterLive(selectedLive)}
           isLoading={isBuyingTicket}
-        />
-      )}
-
-      {showCallModal && (
-        <CallModal
-          onClose={() => setShowCallModal(false)}
-          onCall={handleCall}
         />
       )}
 
@@ -1065,6 +1023,14 @@ export default function CreatorProfilePage() {
           onClose={() => setShowMeetingModal(false)}
         />
       )}
+
+      <BookingCallModal
+        isOpen={showBookingModal}
+        onClose={() => setShowBookingModal(false)}
+        creatorId={creator.id}
+        creatorName={creator.nome}
+        avatarUrl={creator.foto_perfil}
+      />
 
       {/* Close menu overlay */}
       {showMenu && (
