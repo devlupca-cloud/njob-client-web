@@ -27,7 +27,7 @@ import { useGuestGuard } from '@/components/ui/GuestModal'
 import { useToast } from '@/components/ui/Toast'
 import CardPack from '@/components/cards/CardPack'
 import BookingCallModal from '@/components/modals/BookingCallModal'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils'
 import type { Creator, PackInfo, LiveStream } from '@/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -149,11 +149,16 @@ async function fetchCreatorProfile(
       .eq('id', profileId)
       .single(),
     // Check if creator has any future availability (used to show video call button)
-    supabase
-      .from('creator_availability')
-      .select('id', { count: 'exact', head: true })
-      .eq('creator_id', profileId)
-      .gte('availability_date', new Date().toISOString().split('T')[0]),
+    // Use local date (not UTC) to avoid timezone mismatch — availability_date is stored as local date
+    (() => {
+      const now = new Date()
+      const localToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+      return supabase
+        .from('creator_availability')
+        .select('id', { count: 'exact', head: true })
+        .eq('creator_id', profileId)
+        .gte('availability_date', localToday)
+    })(),
     // Check which packs the user already purchased
     userId
       ? supabase
@@ -178,6 +183,7 @@ async function fetchCreatorProfile(
   if (packsRes.error) console.error('[CreatorProfile] Packs error:', packsRes.error)
   if (livesRes.error) console.error('[CreatorProfile] Lives error:', livesRes.error)
   if (subscribersRes.error) console.error('[CreatorProfile] Subscribers error:', subscribersRes.error)
+  if (availabilityRes.error) console.error('[CreatorProfile] Availability error:', availabilityRes.error)
 
   const purchasedPackIds = new Set(
     ((purchasedPacksRes.data ?? []) as { pack_id: string }[]).map((p) => p.pack_id),
@@ -307,7 +313,7 @@ function LiveInfoModal({
           <div className="flex items-center gap-2">
             <Calendar size={18} className="text-[hsl(var(--muted-foreground))]" />
             <span className="text-sm text-[hsl(var(--muted-foreground))]">
-              {formatDate(live.scheduled_start_time)}
+              {formatDateTime(live.scheduled_start_time)}
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -991,7 +997,7 @@ export default function CreatorProfilePage() {
                   <div className="flex items-center gap-2 mt-0.5">
                     <Clock size={11} className="text-[hsl(var(--muted-foreground))]" />
                     <span className="text-xs text-[hsl(var(--muted-foreground))]">
-                      {formatDate(live.scheduled_start_time)}
+                      {formatDateTime(live.scheduled_start_time)}
                     </span>
                   </div>
                 </div>

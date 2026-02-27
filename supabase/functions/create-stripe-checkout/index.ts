@@ -90,7 +90,9 @@ serve(async (req) => {
           id,
           slot_time,
           purchased,
+          availability_id,
           availability:creator_availability!inner (
+            id,
             availability_date,
             creator_id
           )
@@ -107,23 +109,53 @@ serve(async (req) => {
         throw new Error("Este horário já foi reservado por outro cliente.");
       }
 
+      // Se duração é 60 min, verificar que o próximo slot de 30 min existe e está livre
+      if (duration === 60) {
+        const [hh, mm] = String(slotRow.slot_time).slice(0, 5).split(":").map(Number);
+        const nextMin = hh * 60 + mm + 30;
+        const nextH = String(Math.floor(nextMin / 60) % 24).padStart(2, "0");
+        const nextM = String(nextMin % 60).padStart(2, "0");
+        const nextTime = `${nextH}:${nextM}`;
+
+        const availId = (slotRow as any).availability_id;
+        const { data: nextSlot, error: nextErr } = await supabaseAdmin
+          .from("creator_availability_slots")
+          .select("id, purchased")
+          .eq("availability_id", availId)
+          .like("slot_time", `${nextTime}%`)
+          .maybeSingle();
+
+        if (nextErr || !nextSlot) {
+          throw new Error(
+            `Horário seguinte (${nextTime}) não disponível para chamada de 60 min.`,
+          );
+        }
+        if (nextSlot.purchased) {
+          throw new Error(
+            `Horário seguinte (${nextTime}) já reservado. Não é possível agendar 60 min.`,
+          );
+        }
+      }
+
       // Verificar conflito com lives existentes
       const slotDate = (slotRow as any).availability.availability_date;
       const slotTime = slotRow.slot_time;
       const callDuration = duration === 60 ? 60 : 30;
 
-      const dayStart = `${slotDate}T00:00:00`;
-      const dayEnd = `${slotDate}T23:59:59`;
+      // Build UTC timestamps from local BRT date (UTC-3) for correct queries
+      const dayStartUTC = new Date(`${slotDate}T00:00:00-03:00`).toISOString();
+      const dayEndUTC = new Date(`${slotDate}T23:59:59-03:00`).toISOString();
 
       const { data: lives } = await supabaseAdmin
         .from("live_streams")
         .select("scheduled_start_time, estimated_duration_minutes")
         .eq("creator_id", (slotRow as any).availability.creator_id)
         .in("status", ["scheduled", "live"])
-        .gte("scheduled_start_time", dayStart)
-        .lte("scheduled_start_time", dayEnd);
+        .gte("scheduled_start_time", dayStartUTC)
+        .lte("scheduled_start_time", dayEndUTC);
 
-      const callStart = new Date(`${slotDate}T${slotTime}`).getTime();
+      const slotTimePart = String(slotTime).slice(0, 8);
+      const callStart = new Date(`${slotDate}T${slotTimePart}-03:00`).getTime();
       const callEnd = callStart + callDuration * 60 * 1000;
 
       if (lives && lives.length > 0) {
@@ -147,8 +179,8 @@ serve(async (req) => {
         .select("scheduled_start_time, scheduled_duration_minutes")
         .eq("creator_id", creatorId)
         .eq("status", "confirmed")
-        .gte("scheduled_start_time", dayStart)
-        .lte("scheduled_start_time", dayEnd);
+        .gte("scheduled_start_time", dayStartUTC)
+        .lte("scheduled_start_time", dayEndUTC);
 
       if (existingCalls && existingCalls.length > 0) {
         for (const call of existingCalls) {

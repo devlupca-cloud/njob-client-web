@@ -69,12 +69,17 @@ async function fetchCallData(creatorId: string): Promise<{
       .select('call_per_30_min, call_per_1_hr')
       .eq('profile_id', creatorId)
       .single(),
-    supabase
-      .from('creator_availability')
-      .select('id, availability_date, creator_availability_slots(id, slot_time, purchased)')
-      .eq('creator_id', creatorId)
-      .gte('availability_date', new Date().toISOString().split('T')[0])
-      .order('availability_date', { ascending: true }),
+    // Use local date (not UTC) — availability_date is stored as local date
+    (() => {
+      const now = new Date()
+      const localToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+      return supabase
+        .from('creator_availability')
+        .select('id, availability_date, creator_availability_slots(id, slot_time, purchased)')
+        .eq('creator_id', creatorId)
+        .gte('availability_date', localToday)
+        .order('availability_date', { ascending: true })
+    })(),
     supabase
       .from('live_streams')
       .select('scheduled_start_time, estimated_duration_minutes')
@@ -101,7 +106,7 @@ async function fetchCallData(creatorId: string): Promise<{
     const durationMs = (live.estimated_duration_minutes ?? 60) * 60 * 1000
     const end = new Date(start.getTime() + durationMs)
 
-    const dateKey = start.toISOString().split('T')[0]
+    const dateKey = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`
     let cursor = new Date(start)
     while (cursor < end) {
       const hh = String(cursor.getHours()).padStart(2, '0')

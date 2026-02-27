@@ -16,6 +16,13 @@ export function formatDate(date: string | Date): string {
   return new Intl.DateTimeFormat('pt-BR').format(new Date(date))
 }
 
+export function formatDateTime(date: string | Date): string {
+  const d = new Date(date)
+  const datePart = new Intl.DateTimeFormat('pt-BR').format(d)
+  const timePart = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  return `${datePart} às ${timePart}`
+}
+
 export function formatRelativeTime(date: string | Date): string {
   const now = new Date()
   const then = new Date(date)

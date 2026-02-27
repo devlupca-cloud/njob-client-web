@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -51,6 +51,7 @@ interface CallPurchase {
   id: string
   creator_id: string
   user_id: string
+  created_at: string
   scheduled_start_time: string
   scheduled_duration_minutes: number
   call_price: number
@@ -98,6 +99,7 @@ async function fetchPurchases(userId: string): Promise<PurchasesData> {
       supabase
         .from('one_on_one_calls')
         .select('*, profiles!creator_id(id, full_name, avatar_url)')
+
         .eq('user_id', userId)
         .order('scheduled_start_time', { ascending: false })
         .limit(50)
@@ -245,7 +247,7 @@ function LiveList({ lives, onTap }: { lives: LiveTicket[]; onTap: (liveId: strin
                 {live?.title ?? t('purchases.liveRemoved')}
               </p>
               <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
-                {live?.scheduled_start_time ? formatDate(live.scheduled_start_time) : '—'}
+                {live?.scheduled_start_time ? formatDateTime(live.scheduled_start_time) : '—'}
               </p>
               {live?.status && (
                 <span
@@ -290,7 +292,9 @@ function CallList({ calls, onTap }: { calls: CallPurchase[]; onTap: (callId: str
     <div className="flex flex-col gap-3">
       {calls.map((call) => {
         const creator = call.profiles
-        const canEnter = call.status === 'pending' || call.status === 'confirmed'
+        const endTime = new Date(new Date(call.scheduled_start_time).getTime() + call.scheduled_duration_minutes * 60000)
+        const isExpired = (call.status === 'pending' || call.status === 'confirmed') && endTime < new Date()
+        const canEnter = !isExpired && (call.status === 'pending' || call.status === 'confirmed')
         return (
           <button
             key={call.id}
@@ -317,12 +321,19 @@ function CallList({ calls, onTap }: { calls: CallPurchase[]; onTap: (callId: str
                 {creator?.full_name ?? 'Creator'}
               </p>
               <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
-                {formatDate(call.scheduled_start_time)} · {call.scheduled_duration_minutes} min
+                Compra: {formatDate(call.created_at)}
+              </p>
+              <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
+                Chamada: {formatDate(call.scheduled_start_time)} às{' '}
+                {new Date(call.scheduled_start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                {' - '}
+                {new Date(new Date(call.scheduled_start_time).getTime() + call.scheduled_duration_minutes * 60000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                {' · '}{call.scheduled_duration_minutes} min
               </p>
               <span
-                className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded-full mt-1 ${callStatusClass(call.status)}`}
+                className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded-full mt-1 ${isExpired ? 'text-[hsl(var(--muted-foreground))] bg-[hsl(var(--secondary))]' : callStatusClass(call.status)}`}
               >
-                {callStatusLabel(call.status)}
+                {isExpired ? t('purchases.statuses.expired') : callStatusLabel(call.status)}
               </span>
             </div>
 

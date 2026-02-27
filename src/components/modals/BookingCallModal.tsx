@@ -52,10 +52,20 @@ function formatTime(time: string): string {
   return time.slice(0, 5)
 }
 
+/** Returns the next 30-min slot time string (e.g. "01:00" → "01:30") */
+function nextSlotTime(slotTime: string): string {
+  const [hh, mm] = slotTime.split(':').map(Number)
+  const totalMin = hh * 60 + mm + 30
+  const h = String(Math.floor(totalMin / 60) % 24).padStart(2, '0')
+  const m = String(totalMin % 60).padStart(2, '0')
+  return `${h}:${m}`
+}
+
 /** Check if a slot time has already passed for a given date */
 function isSlotPast(dateStr: string, slotTime: string): boolean {
   const now = new Date()
-  const todayStr = now.toISOString().split('T')[0]
+  // Use local date (not UTC) — availability_date is stored as local date
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   // Only check for today — future dates are never past
   if (dateStr !== todayStr) return false
   const [hh, mm] = slotTime.split(':').map(Number)
@@ -73,12 +83,17 @@ async function fetchCallAvailability(creatorId: string) {
       .select('call_per_30_min, call_per_1_hr')
       .eq('profile_id', creatorId)
       .single(),
-    supabase
-      .from('creator_availability')
-      .select('id, availability_date, creator_availability_slots(id, slot_time, purchased)')
-      .eq('creator_id', creatorId)
-      .gte('availability_date', new Date().toISOString().split('T')[0])
-      .order('availability_date', { ascending: true }),
+    // Use local date (not UTC) — availability_date is stored as local date
+    (() => {
+      const now = new Date()
+      const localToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+      return supabase
+        .from('creator_availability')
+        .select('id, availability_date, creator_availability_slots(id, slot_time, purchased)')
+        .eq('creator_id', creatorId)
+        .gte('availability_date', localToday)
+        .order('availability_date', { ascending: true })
+    })(),
     supabase
       .from('live_streams')
       .select('scheduled_start_time, estimated_duration_minutes')
@@ -99,7 +114,7 @@ async function fetchCallAvailability(creatorId: string) {
     const start = new Date(live.scheduled_start_time)
     const durationMs = (live.estimated_duration_minutes ?? 60) * 60 * 1000
     const end = new Date(start.getTime() + durationMs)
-    const dateKey = start.toISOString().split('T')[0]
+    const dateKey = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`
     let cursor = new Date(start)
     while (cursor < end) {
       const hh = String(cursor.getHours()).padStart(2, '0')
@@ -304,7 +319,12 @@ export default function BookingCallModal({
                 </label>
                 <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1">
                   {data.dates.map((d) => {
-                    const futureCount = d.slots.filter((s) => !isSlotPast(d.availability_date, s.slot_time)).length
+                    const futureSlots = d.slots.filter((s) => !isSlotPast(d.availability_date, s.slot_time))
+                    let futureCount = futureSlots.length
+                    if (duration === 60) {
+                      const times = new Set(futureSlots.map((s) => formatTime(s.slot_time)))
+                      futureCount = futureSlots.filter((s) => times.has(nextSlotTime(formatTime(s.slot_time)))).length
+                    }
                     return (
                     <button
                       key={d.id}
@@ -326,7 +346,19 @@ export default function BookingCallModal({
               </div>
 
               {/* Time slots */}
-              {selectedDateData && (
+              {selectedDateData && (() => {
+                // Build set of available slot times for 60-min validation
+                const availableTimes = new Set(
+                  selectedDateData.slots
+                    .filter((s) => !isSlotPast(selectedDate!, s.slot_time))
+                    .map((s) => formatTime(s.slot_time))
+                )
+                // When selected slot exists, compute the next slot time for highlight
+                const selectedNext = selectedSlot && duration === 60
+                  ? nextSlotTime(formatTime(selectedSlot.slot_time))
+                  : null
+
+                return (
                 <div>
                   <label className="text-xs font-medium text-[hsl(var(--muted-foreground))] uppercase tracking-wider mb-2 block">
                     <Clock size={12} className="inline mr-1.5" />
@@ -334,34 +366,43 @@ export default function BookingCallModal({
                   </label>
                   <div className="grid grid-cols-4 gap-2">
                     {selectedDateData.slots.map((slot) => {
+                      const time = formatTime(slot.slot_time)
                       const past = isSlotPast(selectedDate!, slot.slot_time)
                       const selected = selectedSlot?.id === slot.id
+                      // For 60 min: disable if the next consecutive slot is not available
+                      const needs60 = duration === 60
+                      const nextAvailable = !needs60 || availableTimes.has(nextSlotTime(time))
+                      const disabled = past || (needs60 && !nextAvailable)
+                      // Highlight the "companion" slot when 60 min is selected
+                      const isCompanion = selectedNext === time
+
                       return (
                         <button
                           key={slot.id}
                           onClick={() => {
-                            if (past) {
-                              setError(t('booking.slotPast'))
+                            if (disabled) {
+                              setError(past ? t('booking.slotPast') : 'Horário seguinte indisponível para 60 min')
                               return
                             }
                             setError(null)
                             setSelectedSlot(slot)
                           }}
                           className={`py-2.5 rounded-xl text-sm font-medium transition-colors border ${
-                            past
+                            disabled
                               ? 'bg-[hsl(var(--card))] text-[hsl(var(--muted-foreground))]/40 border-[hsl(var(--border))]/40 opacity-40 cursor-not-allowed line-through'
-                              : selected
+                              : selected || isCompanion
                                 ? 'bg-[hsl(var(--primary))] text-white border-[hsl(var(--primary))]'
                                 : 'bg-[hsl(var(--card))] text-[hsl(var(--foreground))] border-[hsl(var(--border))]'
                           }`}
                         >
-                          {formatTime(slot.slot_time)}
+                          {time}
                         </button>
                       )
                     })}
                   </div>
                 </div>
-              )}
+                )
+              })()}
 
               {/* Error */}
               {error && (

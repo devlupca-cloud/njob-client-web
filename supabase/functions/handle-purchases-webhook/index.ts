@@ -31,12 +31,14 @@ serve(async (req) => {
       Stripe.createSubtleCryptoProvider(),
     );
 
-    // Idempotencia por event.id
-    const { error: idemErr } = await supabaseAdmin
+    // Idempotencia: checar se já foi processado (sem inserir ainda)
+    const { data: existing } = await supabaseAdmin
       .from("processed_webhook_events")
-      .insert({ id: event.id });
+      .select("id")
+      .eq("id", event.id)
+      .maybeSingle();
 
-    if (idemErr) {
+    if (existing) {
       return new Response(
         JSON.stringify({ received: true, duplicate: true }),
         { status: 200 },
@@ -103,6 +105,11 @@ serve(async (req) => {
       default:
         break;
     }
+
+    // Marcar como processado APÓS sucesso (permite retry se falhar)
+    await supabaseAdmin
+      .from("processed_webhook_events")
+      .insert({ id: event.id });
 
     return new Response(JSON.stringify({ received: true }), { status: 200 });
   } catch (error: any) {
@@ -386,7 +393,9 @@ async function handlePaymentCheckoutCompleted(session: any, connectedAccountId?:
         ? duration
         : 30;
 
-    const scheduledStartTime = `${availabilityDate}T${slotTime}`;
+    // Build UTC timestamp from local BRT date+time (UTC-3)
+    const timePart = String(slotTime).slice(0, 8); // ensure HH:mm:ss only
+    const scheduledStartTime = new Date(`${availabilityDate}T${timePart}-03:00`).toISOString();
 
     // 1) Marcar slot como comprado ATOMICAMENTE (previne race condition)
     const { data: updatedSlots, error: slotUpdateErr } = await supabaseAdmin
@@ -403,6 +412,29 @@ async function handlePaymentCheckoutCompleted(session: any, connectedAccountId?:
     if (!updatedSlots || updatedSlots.length === 0) {
       console.warn(`Slot ${slotId} já foi comprado por outro cliente. Ignorando duplicata.`);
       return;
+    }
+
+    // 1b) Se duração é 60 min, marcar o próximo slot de 30 min como comprado também
+    if (durationMinutes === 60) {
+      const [hh, mm] = String(slotTime).slice(0, 5).split(":").map(Number);
+      const nextMin = hh * 60 + mm + 30;
+      const nextH = String(Math.floor(nextMin / 60) % 24).padStart(2, "0");
+      const nextM = String(nextMin % 60).padStart(2, "0");
+      const nextTime = `${nextH}:${nextM}`;
+
+      // Find the availability_id for this slot
+      const availabilityId = (slotRow as any).availability.id;
+
+      const { error: nextSlotErr } = await supabaseAdmin
+        .from("creator_availability_slots")
+        .update({ purchased: true })
+        .eq("availability_id", availabilityId)
+        .like("slot_time", `${nextTime}%`)
+        .eq("purchased", false);
+
+      if (nextSlotErr) {
+        console.warn(`Erro ao reservar slot seguinte (${nextTime}): ${nextSlotErr.message}`);
+      }
     }
 
     // 2) Criar registro da chamada (slot já reservado)

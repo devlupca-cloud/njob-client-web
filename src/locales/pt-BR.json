@@ -400,7 +400,8 @@
       "pending": "Pendente",
       "confirmed": "Confirmada",
       "done": "Realizada",
-      "canceled": "Cancelada"
+      "canceled": "Cancelada",
+      "expired": "Encerrada"
     },
     "emptyPacks": "Você ainda não comprou nenhum pacote.",
     "emptyLives": "Você ainda não comprou ingresso para nenhuma live.",
