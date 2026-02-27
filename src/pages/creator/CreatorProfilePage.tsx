@@ -27,7 +27,7 @@ import { useGuestGuard } from '@/components/ui/GuestModal'
 import { useToast } from '@/components/ui/Toast'
 import CardPack from '@/components/cards/CardPack'
 import BookingCallModal from '@/components/modals/BookingCallModal'
-import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils'
+import { formatCurrency, formatDateTime } from '@/lib/utils'
 import type { Creator, PackInfo, LiveStream } from '@/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
