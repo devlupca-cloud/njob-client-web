@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -9,6 +9,8 @@ import {
   PhoneCall,
   ShoppingBag,
   Image,
+  Lock,
+  Clock,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
@@ -117,6 +119,29 @@ async function fetchPurchases(userId: string): Promise<PurchasesData> {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+/** Clock that ticks every minute so countdowns stay fresh */
+function useNow(intervalMs = 60_000) {
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), intervalMs)
+    return () => clearInterval(id)
+  }, [intervalMs])
+  return now
+}
+
+/** How many minutes until `target`? Returns a human-readable string or null if past */
+function countdownText(now: Date, target: Date): string | null {
+  const diffMs = target.getTime() - now.getTime()
+  if (diffMs <= 0) return null
+  const mins = Math.ceil(diffMs / 60_000)
+  if (mins >= 60 * 24) return `${Math.floor(mins / (60 * 24))}d`
+  if (mins >= 60) return `${Math.floor(mins / 60)}h ${mins % 60}min`
+  return `${mins}min`
+}
+
+/** Allow entry from ENTRY_BUFFER_MIN before start until end */
+const ENTRY_BUFFER_MIN = 5
+
 function callStatusClass(status: CallPurchase['status']): string {
   switch (status) {
     case 'completed': return 'text-green-400 bg-green-500/10'
@@ -212,7 +237,7 @@ function PackList({ packs, onTap }: { packs: PackPurchase[]; onTap: (creatorId: 
 
 // ─── Live List ────────────────────────────────────────────────────────────────
 
-function LiveList({ lives, onTap }: { lives: LiveTicket[]; onTap: (liveId: string) => void }) {
+function LiveList({ lives, now, onTap }: { lives: LiveTicket[]; now: Date; onTap: (liveId: string) => void }) {
   const { t } = useTranslation()
   if (lives.length === 0) return <EmptyState tab="lives" />
 
@@ -220,7 +245,16 @@ function LiveList({ lives, onTap }: { lives: LiveTicket[]; onTap: (liveId: strin
     <div className="flex flex-col gap-3">
       {lives.map((ticket) => {
         const live = ticket.live_streams
-        const canEnter = live?.status === 'live' || live?.status === 'scheduled'
+        // Only allow entry when live is actually streaming
+        const isLive = live?.status === 'live'
+        const isScheduled = live?.status === 'scheduled'
+        const isEnded = live?.status === 'ended'
+        const canEnter = isLive
+
+        // Countdown for scheduled lives
+        const scheduledDate = live?.scheduled_start_time ? new Date(live.scheduled_start_time) : null
+        const remaining = scheduledDate && isScheduled ? countdownText(now, scheduledDate) : null
+
         return (
           <button
             key={ticket.id}
@@ -249,11 +283,29 @@ function LiveList({ lives, onTap }: { lives: LiveTicket[]; onTap: (liveId: strin
               <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
                 {live?.scheduled_start_time ? formatDateTime(live.scheduled_start_time) : '—'}
               </p>
-              {live?.status && (
-                <span
-                  className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded-full mt-1 ${liveStatusClass(live.status)}`}
-                >
-                  {live.status === 'live' ? t('purchases.liveStatuses.live') : live.status === 'scheduled' ? t('purchases.liveStatuses.scheduled') : t('purchases.liveStatuses.ended')}
+
+              {/* Status badge */}
+              {isLive && (
+                <span className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded-full mt-1 ${liveStatusClass('live')}`}>
+                  {t('purchases.liveStatuses.live')}
+                </span>
+              )}
+              {isEnded && (
+                <span className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded-full mt-1 ${liveStatusClass('ended')}`}>
+                  {t('purchases.liveStatuses.ended')}
+                </span>
+              )}
+
+              {/* Time lock for scheduled */}
+              {isScheduled && remaining && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full mt-1 text-yellow-400 bg-yellow-500/10">
+                  <Lock size={10} />
+                  {t('purchases.availableIn', { time: remaining })}
+                </span>
+              )}
+              {isScheduled && !remaining && (
+                <span className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded-full mt-1 ${liveStatusClass('scheduled')}`}>
+                  {t('purchases.liveStatuses.scheduled')}
                 </span>
               )}
             </div>
@@ -273,7 +325,7 @@ function LiveList({ lives, onTap }: { lives: LiveTicket[]; onTap: (liveId: strin
 
 // ─── Call List ────────────────────────────────────────────────────────────────
 
-function CallList({ calls, onTap }: { calls: CallPurchase[]; onTap: (callId: string) => void }) {
+function CallList({ calls, now, onTap }: { calls: CallPurchase[]; now: Date; onTap: (callId: string) => void }) {
   const { t } = useTranslation()
 
   function callStatusLabel(status: CallPurchase['status']): string {
@@ -292,9 +344,19 @@ function CallList({ calls, onTap }: { calls: CallPurchase[]; onTap: (callId: str
     <div className="flex flex-col gap-3">
       {calls.map((call) => {
         const creator = call.profiles
-        const endTime = new Date(new Date(call.scheduled_start_time).getTime() + call.scheduled_duration_minutes * 60000)
-        const isExpired = (call.status === 'pending' || call.status === 'confirmed') && endTime < new Date()
-        const canEnter = !isExpired && (call.status === 'pending' || call.status === 'confirmed')
+        const startTime = new Date(call.scheduled_start_time)
+        const endTime = new Date(startTime.getTime() + call.scheduled_duration_minutes * 60_000)
+        const entryOpensAt = new Date(startTime.getTime() - ENTRY_BUFFER_MIN * 60_000)
+
+        const isExpired = (call.status === 'pending' || call.status === 'confirmed') && endTime < now
+        const isActive = call.status === 'pending' || call.status === 'confirmed'
+        const isInTimeWindow = now >= entryOpensAt && now <= endTime
+        const canEnter = isActive && !isExpired && isInTimeWindow
+        const isTooEarly = isActive && !isExpired && now < entryOpensAt
+
+        // Countdown text for when it's too early
+        const remaining = isTooEarly ? countdownText(now, entryOpensAt) : null
+
         return (
           <button
             key={call.id}
@@ -325,16 +387,35 @@ function CallList({ calls, onTap }: { calls: CallPurchase[]; onTap: (callId: str
               </p>
               <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
                 Chamada: {formatDate(call.scheduled_start_time)} às{' '}
-                {new Date(call.scheduled_start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                {startTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                 {' - '}
-                {new Date(new Date(call.scheduled_start_time).getTime() + call.scheduled_duration_minutes * 60000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                {endTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                 {' · '}{call.scheduled_duration_minutes} min
               </p>
-              <span
-                className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded-full mt-1 ${isExpired ? 'text-[hsl(var(--muted-foreground))] bg-[hsl(var(--secondary))]' : callStatusClass(call.status)}`}
-              >
-                {isExpired ? t('purchases.statuses.expired') : callStatusLabel(call.status)}
-              </span>
+
+              {/* Status / time lock */}
+              {isExpired && (
+                <span className="inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded-full mt-1 text-[hsl(var(--muted-foreground))] bg-[hsl(var(--secondary))]">
+                  {t('purchases.statuses.expired')}
+                </span>
+              )}
+              {isTooEarly && remaining && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full mt-1 text-yellow-400 bg-yellow-500/10">
+                  <Lock size={10} />
+                  {t('purchases.availableIn', { time: remaining })}
+                </span>
+              )}
+              {canEnter && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full mt-1 text-green-400 bg-green-500/10">
+                  <Clock size={10} />
+                  {t('purchases.readyToJoin')}
+                </span>
+              )}
+              {!isExpired && !isTooEarly && !canEnter && (
+                <span className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded-full mt-1 ${callStatusClass(call.status)}`}>
+                  {callStatusLabel(call.status)}
+                </span>
+              )}
             </div>
 
             {/* Valor */}
@@ -370,11 +451,12 @@ export default function PurchasesPage() {
     { key: 'calls', label: t('purchases.tabs.calls'), icon: <PhoneCall size={14} /> },
   ]
 
+  const now = useNow()
+
   const { data, isLoading, isError } = useQuery({
     queryKey: ['purchases', userId],
     queryFn: () => fetchPurchases(userId!),
     enabled: !!userId,
-    staleTime: 1000 * 60 * 2,
   })
 
   const counts = {
@@ -451,8 +533,8 @@ export default function PurchasesPage() {
       {!isLoading && !isError && (
         <main className="flex-1 px-4 py-4 max-w-3xl mx-auto w-full">
           {activeTab === 'packs' && <PackList packs={data?.packs ?? []} onTap={(creatorId) => navigate(`/creator/${creatorId}/content`)} />}
-          {activeTab === 'lives' && <LiveList lives={data?.lives ?? []} onTap={(liveId) => navigate(`/lives/${liveId}`)} />}
-          {activeTab === 'calls' && <CallList calls={data?.calls ?? []} onTap={(callId) => navigate(`/calls/${callId}`)} />}
+          {activeTab === 'lives' && <LiveList lives={data?.lives ?? []} now={now} onTap={(liveId) => navigate(`/lives/${liveId}`)} />}
+          {activeTab === 'calls' && <CallList calls={data?.calls ?? []} now={now} onTap={(callId) => navigate(`/calls/${callId}`)} />}
         </main>
       )}
     </div>

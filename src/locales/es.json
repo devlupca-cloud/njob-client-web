@@ -413,7 +413,9 @@
     "freeTag": "Gratis",
     "packRemoved": "Paquete eliminado",
     "liveRemoved": "Live eliminado",
-    "loadError": "Error al cargar compras. Inténtalo de nuevo."
+    "loadError": "Error al cargar compras. Inténtalo de nuevo.",
+    "availableIn": "Disponible en {{time}}",
+    "readyToJoin": "Listo para entrar"
   },
 
   "payments": {

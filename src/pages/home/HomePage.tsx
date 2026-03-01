@@ -222,7 +222,6 @@ export default function HomePage() {
   const { data: creators, isLoading, isError } = useQuery({
     queryKey: ['creators', currentUser?.id ?? 'anon'],
     queryFn: () => fetchCreators(currentUser?.id),
-    staleTime: 1000 * 60 * 2,
     placeholderData: keepPreviousData,
   })
 

@@ -223,7 +223,6 @@ export default function SubscriptionPage() {
     queryKey: ['subscription', user?.id],
     queryFn: () => fetchPlansAndSubscription(user!.id),
     enabled: !!user?.id,
-    staleTime: 1000 * 60 * 5,
   })
 
   // Detectar retorno do Stripe checkout

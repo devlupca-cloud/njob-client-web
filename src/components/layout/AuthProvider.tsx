@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import type { Profile } from '@/types'
@@ -18,6 +19,8 @@ async function fetchProfile(userId: string) {
  * Supabase client hangs on subsequent API calls.
  */
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
+  const queryClient = useQueryClient()
+
   useEffect(() => {
     let mounted = true
 
@@ -45,7 +48,13 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
         if (event === 'SIGNED_OUT') {
           store.clear()
+          queryClient.clear()   // drop all cached data from previous session
           return
+        }
+
+        // SIGNED_IN — clear stale cache from guest/previous user and refetch
+        if (event === 'SIGNED_IN') {
+          queryClient.invalidateQueries()
         }
 
         // TOKEN_REFRESHED, SIGNED_IN, etc.

@@ -586,7 +586,6 @@ export default function CreatorProfilePage() {
     queryKey: ['creator-profile', profileId],
     queryFn: () => fetchCreatorProfile(profileId!, currentUser?.id),
     enabled: !!profileId,
-    staleTime: 1000 * 60 * 2,
     placeholderData: keepPreviousData,
   })
 
@@ -674,7 +673,7 @@ export default function CreatorProfilePage() {
             product_id: pack.id,
             product_type: 'pack',
             success_url: `${appUrl}/purchases`,
-            cancel_url: `${appUrl}/creator/${pack.creator_id}`,
+            cancel_url: `${appUrl}/home`,
           }),
         }
       )
@@ -752,8 +751,8 @@ export default function CreatorProfilePage() {
             stripe_price_id: live.stripe_price_id,
             product_id: live.id,
             product_type: 'live_ticket',
-            success_url: `${appUrl}/lives/${live.id}`,
-            cancel_url: `${appUrl}/creator/${live.creator_id}`,
+            success_url: `${appUrl}/purchases`,
+            cancel_url: `${appUrl}/home`,
           }),
         }
       )

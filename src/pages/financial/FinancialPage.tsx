@@ -185,7 +185,6 @@ export default function FinancialPage() {
     queryKey: ['transactions', user?.id],
     queryFn: () => fetchTransactions(user!.id),
     enabled: !!user?.id,
-    staleTime: 1000 * 60 * 2,
   })
 
   // Filtragem por período

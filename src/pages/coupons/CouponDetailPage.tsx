@@ -62,7 +62,6 @@ export default function CouponDetailPage() {
     queryKey: ['coupon', id],
     queryFn: () => fetchCoupon(id!),
     enabled: !!id,
-    staleTime: 1000 * 60 * 5,
   })
 
   function handleCopy() {

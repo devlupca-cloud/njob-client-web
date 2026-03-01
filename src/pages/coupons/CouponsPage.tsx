@@ -148,7 +148,6 @@ export default function CouponsPage() {
     queryKey: ['available-coupons'],
     queryFn: () => fetchAvailableCoupons(),
     enabled: !!user?.id,
-    staleTime: 1000 * 60 * 2,
   })
 
   return (

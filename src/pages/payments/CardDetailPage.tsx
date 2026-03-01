@@ -89,7 +89,6 @@ export default function CardDetailPage() {
     queryKey: ['card', id],
     queryFn: () => fetchCard(id!),
     enabled: !!id,
-    staleTime: 1000 * 60 * 5,
   })
 
   const deleteMutation = useMutation({

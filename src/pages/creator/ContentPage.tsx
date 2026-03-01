@@ -431,20 +431,30 @@ function PackDetailModal({
   const { t } = useTranslation()
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center"
       onClick={onClose}
     >
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-[fadeIn_200ms_ease-out]" />
+
+      {/* Bottom sheet */}
       <div
-        className="w-full max-w-lg max-h-[85vh] rounded-t-2xl bg-[hsl(var(--background))] border-t border-[hsl(var(--border))] flex flex-col overflow-hidden"
+        className="
+          relative w-full sm:max-w-lg max-h-[85dvh] rounded-t-2xl sm:rounded-2xl
+          bg-[hsl(var(--card))] border border-[hsl(var(--border))]
+          shadow-[0_-4px_32px_rgba(0,0,0,0.5)]
+          flex flex-col overflow-hidden pb-safe
+          animate-[slideUp_250ms_ease-out]
+        "
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Handle */}
-        <div className="pt-3 pb-2 flex justify-center">
+        {/* Handle (mobile only) */}
+        <div className="pt-3 pb-2 flex justify-center sm:hidden">
           <div className="w-10 h-1 rounded-full bg-[hsl(var(--border))]" />
         </div>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-4 pb-3 border-b border-[hsl(var(--border))]">
+        <div className="flex items-center justify-between px-4 pb-3 sm:pt-4 border-b border-[hsl(var(--border))]">
           <div className="flex-1 min-w-0">
             <h3 className="text-base font-bold text-[hsl(var(--foreground))] truncate">
               {pack.title}
@@ -455,7 +465,7 @@ function PackDetailModal({
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-[hsl(var(--secondary))] transition-colors"
+            className="w-8 h-8 flex items-center justify-center rounded-full bg-[hsl(var(--secondary))] hover:bg-[hsl(var(--secondary)/0.8)] transition-colors"
           >
             <X size={18} className="text-[hsl(var(--foreground))]" />
           </button>
@@ -607,7 +617,7 @@ export default function ContentPage() {
             product_id: pack.id,
             product_type: 'pack',
             success_url: `${appUrl}/purchases`,
-            cancel_url: `${appUrl}/creator/${pack.creator_id}/content`,
+            cancel_url: `${appUrl}/home`,
           }),
         }
       )
@@ -634,7 +644,6 @@ export default function ContentPage() {
       return fetchCreatorContent(resolvedProfileId, currentUser?.id)
     },
     enabled: !!resolvedProfileId,
-    staleTime: 1000 * 60 * 2,
     placeholderData: keepPreviousData,
   })
 

@@ -157,7 +157,6 @@ export default function NewCallPage() {
     queryKey: ['call-availability', creatorId],
     queryFn: () => fetchCallData(creatorId!),
     enabled: !!creatorId,
-    staleTime: 1000 * 30,
   })
 
   const selectedDateData = data?.dates.find((d) => d.availability_date === selectedDate)
@@ -197,8 +196,8 @@ export default function NewCallPage() {
             product_id: selectedSlot.id,
             product_type: 'video-call',
             duration,
-            success_url: `${appUrl}/purchases?tab=calls`,
-            cancel_url: `${appUrl}/calls/new?creatorId=${creatorId}`,
+            success_url: `${appUrl}/purchases`,
+            cancel_url: `${appUrl}/home`,
           }),
         }
       )

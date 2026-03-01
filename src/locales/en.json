@@ -413,7 +413,9 @@
     "freeTag": "Free",
     "packRemoved": "Pack removed",
     "liveRemoved": "Live removed",
-    "loadError": "Failed to load purchases. Please try again."
+    "loadError": "Failed to load purchases. Please try again.",
+    "availableIn": "Available in {{time}}",
+    "readyToJoin": "Ready to join"
   },
 
   "payments": {

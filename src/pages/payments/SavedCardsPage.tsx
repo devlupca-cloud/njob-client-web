@@ -157,7 +157,6 @@ export default function SavedCardsPage() {
     queryKey: ['saved-cards', user?.id],
     queryFn: () => fetchSavedCards(user!.id),
     enabled: !!user?.id,
-    staleTime: 1000 * 60 * 2,
     retry: false,
   })
 

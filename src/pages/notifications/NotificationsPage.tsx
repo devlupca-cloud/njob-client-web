@@ -251,7 +251,6 @@ export default function NotificationsPage() {
     queryKey: ['notifications', userId],
     queryFn: () => fetchNotifications(userId!),
     enabled: !!userId,
-    staleTime: 30_000,
   })
 
   const unreadCount = notifications.filter((n) => !n.is_read).length
