@@ -67,7 +67,7 @@ serve(async (req) => {
       stripeAccountId = account.id;
 
       // Salvar na tabela creator_payout_info
-      await supabaseAdmin.from("creator_payout_info").upsert(
+      const { error: upsertError } = await supabaseAdmin.from("creator_payout_info").upsert(
         {
           creator_id: userId,
           payout_method: "stripe",
@@ -80,14 +80,50 @@ serve(async (req) => {
         },
         { onConflict: "creator_id" },
       );
+
+      if (upsertError) {
+        console.error("Erro ao salvar creator_payout_info:", upsertError);
+        throw new Error(`Erro ao salvar informações de pagamento: ${upsertError.message}`);
+      }
     }
 
-    // 4) Criar link de onboarding
+    // 4) Verificar se a conta ja completou o onboarding
+    const account = await stripe.accounts.retrieve(stripeAccountId);
+
+    if (account.details_submitted) {
+      // Onboarding ja foi concluido — atualizar status no banco
+      const connStatus = account.charges_enabled
+        ? "COMPLETED"
+        : "VERIFYING";
+      await supabaseAdmin
+        .from("creator_payout_info")
+        .update({
+          status: connStatus,
+          account_details: {
+            stripe_account_id: stripeAccountId,
+            charges_enabled: account.charges_enabled,
+            payouts_enabled: account.payouts_enabled,
+            details_submitted: true,
+            last_synced_at: new Date().toISOString(),
+          },
+        })
+        .eq("creator_id", userId);
+
+      return new Response(
+        JSON.stringify({ completed: account.charges_enabled }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        },
+      );
+    }
+
+    // 5) Criar link de onboarding (somente para contas que ainda nao completaram)
     const baseUrl = Deno.env.get("SUPABASE_URL")!;
     const accountLink = await stripe.accountLinks.create({
       account: stripeAccountId,
       refresh_url: `${baseUrl}/functions/v1/create-stripe-connected-account`,
-      return_url: "https://njob-creator.vercel.app/home",
+      return_url: "https://creator.njob.com.br/home",
       type: "account_onboarding",
     });
 

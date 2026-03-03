@@ -54,7 +54,7 @@ serve(async (req) => {
 
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: profile.stripe_customer_id,
-      return_url: return_url || "https://njob-client-web.vercel.app/subscription",
+      return_url: return_url || "https://www.njob.com.br/subscription",
     });
 
     return new Response(JSON.stringify({

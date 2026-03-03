@@ -40,26 +40,36 @@ serve(async (req) => {
     if (!userId) throw new Error("ID do usuario nao encontrado no token");
 
     // 2) Buscar stripe_account_id
-    const { data: payoutInfo, error: payoutError } = await supabaseAdmin
+    const { data: payoutInfo } = await supabaseAdmin
       .from("creator_payout_info")
       .select("account_details, status")
       .eq("creator_id", userId)
-      .single();
+      .maybeSingle();
 
-    if (payoutError || !payoutInfo) {
-      throw new Error("Informacoes de pagamento nao encontradas. Configure sua conta primeiro.");
+    if (!payoutInfo || !payoutInfo.account_details?.stripe_account_id) {
+      // Registro nao existe — retornar indicacao para o frontend criar a conta
+      return new Response(
+        JSON.stringify({ error: "account_onboarding", status: "NOT_FOUND", message: "Conta Stripe não encontrada. É necessário criar a conta." }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
-    const stripeAccountId = payoutInfo.account_details?.stripe_account_id;
-    if (!stripeAccountId) {
-      throw new Error("Conta Stripe nao encontrada. Faca o onboarding primeiro.");
-    }
+    const stripeAccountId = payoutInfo.account_details.stripe_account_id;
 
     // 3) Verificar status da conta no Stripe
     const account = await stripe.accounts.retrieve(stripeAccountId);
 
-    // Atualizar status no banco
-    const newStatus = account.charges_enabled ? "COMPLETED" : "PENDING";
+    // Status baseia-se em charges_enabled, pois so quando charges_enabled=true
+    // a conta pode receber pagamentos. VERIFYING = onboarding concluido mas
+    // Stripe ainda verificando a conta.
+    const newStatus = account.charges_enabled
+      ? "COMPLETED"
+      : account.details_submitted
+        ? "VERIFYING"
+        : "PENDING";
     await supabaseAdmin
       .from("creator_payout_info")
       .update({
@@ -68,42 +78,56 @@ serve(async (req) => {
           ...payoutInfo.account_details,
           charges_enabled: account.charges_enabled,
           payouts_enabled: account.payouts_enabled,
+          details_submitted: account.details_submitted,
           last_synced_at: new Date().toISOString(),
         },
       })
       .eq("creator_id", userId);
 
     // 4) Gerar link apropriado
-    let url: string;
-
-    if (account.details_submitted && account.charges_enabled) {
-      // Conta completa: gerar login link para Express Dashboard
-      const loginLink = await stripe.accounts.createLoginLink(stripeAccountId);
-      url = loginLink.url;
-    } else {
-      // Conta incompleta: gerar link de onboarding/atualizacao
-      const accountLink = await stripe.accountLinks.create({
-        account: stripeAccountId,
-        refresh_url: "https://njob-creator.vercel.app/home",
-        return_url: "https://njob-creator.vercel.app/home",
-        type: "account_onboarding",
-      });
-      url = accountLink.url;
-      // Sinaliza que precisa completar onboarding
+    if (account.details_submitted) {
+      if (account.charges_enabled) {
+        // Conta totalmente verificada: gerar login link para Express Dashboard
+        const loginLink = await stripe.accounts.createLoginLink(stripeAccountId);
+        return new Response(
+          JSON.stringify({ url: loginLink.url, login_url: loginLink.url, status: "COMPLETED" }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 200,
+          },
+        );
+      }
+      // Onboarding concluido, aguardando verificacao do Stripe
+      const disabledReason = account.requirements?.disabled_reason || null;
+      const pastDue = account.requirements?.past_due || [];
+      const currentlyDue = account.requirements?.currently_due || [];
       return new Response(
-        JSON.stringify({ error: "account_onboarding", url, onboarding_url: url }),
+        JSON.stringify({
+          status: "VERIFYING",
+          message: "Sua conta está em verificação pelo Stripe. Isso pode levar alguns minutos.",
+          disabled_reason: disabledReason,
+          past_due: pastDue,
+          currently_due: currentlyDue,
+        }),
         {
-          status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
         },
       );
     }
 
+    // Conta incompleta: gerar link de onboarding/atualizacao
+    const accountLink = await stripe.accountLinks.create({
+      account: stripeAccountId,
+      refresh_url: "https://creator.njob.com.br/home",
+      return_url: "https://creator.njob.com.br/home",
+      type: "account_onboarding",
+    });
     return new Response(
-      JSON.stringify({ url, login_url: url }),
+      JSON.stringify({ error: "account_onboarding", url: accountLink.url, onboarding_url: accountLink.url }),
       {
+        status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
       },
     );
   } catch (error: any) {

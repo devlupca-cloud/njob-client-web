@@ -50,14 +50,20 @@ serve(async (req) => {
       case "account.updated": {
         const account: any = event.data.object;
         if (connectedAccountId) {
+          const webhookStatus = account.charges_enabled
+            ? "COMPLETED"
+            : account.details_submitted
+              ? "VERIFYING"
+              : "PENDING";
           await supabaseAdmin
             .from("creator_payout_info")
             .update({
-              status: account.charges_enabled ? "COMPLETED" : "PENDING",
+              status: webhookStatus,
               account_details: {
                 stripe_account_id: connectedAccountId,
                 charges_enabled: account.charges_enabled ?? false,
                 payouts_enabled: account.payouts_enabled ?? false,
+                details_submitted: account.details_submitted ?? false,
                 last_synced_at: new Date().toISOString(),
               },
             })

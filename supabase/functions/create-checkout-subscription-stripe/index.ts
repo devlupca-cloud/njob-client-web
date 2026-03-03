@@ -44,8 +44,8 @@ serve(async (req) => {
     if (!price_id) throw new Error("price_id é obrigatório");
     if (!creator_id) throw new Error("creator_id é obrigatório");
 
-    const finalSuccessUrl = custom_success_url || 'https://njob-client-web.vercel.app/home';
-    const finalCancelUrl = custom_cancel_url || 'https://njob-client-web.vercel.app/home';
+    const finalSuccessUrl = custom_success_url || 'https://www.njob.com.br/home';
+    const finalCancelUrl = custom_cancel_url || 'https://www.njob.com.br/home';
 
     // --- Buscar ou criar Stripe Customer ---
     let stripeCustomerId: string | null = null;

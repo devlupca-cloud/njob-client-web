@@ -125,7 +125,8 @@ async function fetchCallAvailability(creatorId: string) {
   }
 
   // Filter availability: remove purchased and live-blocked slots
-  const dates: AvailabilityDate[] = []
+  // Merge slots from all availability records sharing the same date
+  const dateMap = new Map<string, AvailabilityDate>()
   for (const av of availabilityRes.data ?? []) {
     const slots = ((av as any).creator_availability_slots ?? [])
       .filter((s: any) => {
@@ -133,12 +134,29 @@ async function fetchCallAvailability(creatorId: string) {
         const timeKey = `${av.availability_date}_${formatTime(s.slot_time)}`
         return !blockedSlots.has(timeKey)
       })
-      .sort((a: any, b: any) => a.slot_time.localeCompare(b.slot_time))
 
-    if (slots.length > 0) {
-      dates.push({ id: av.id, availability_date: av.availability_date, slots })
+    if (slots.length === 0) continue
+
+    const existing = dateMap.get(av.availability_date)
+    if (existing) {
+      // Merge slots and deduplicate by time
+      const seenTimes = new Set(existing.slots.map((s) => formatTime(s.slot_time)))
+      for (const s of slots) {
+        if (!seenTimes.has(formatTime(s.slot_time))) {
+          existing.slots.push(s)
+          seenTimes.add(formatTime(s.slot_time))
+        }
+      }
+      existing.slots.sort((a, b) => a.slot_time.localeCompare(b.slot_time))
+    } else {
+      dateMap.set(av.availability_date, {
+        id: av.id,
+        availability_date: av.availability_date,
+        slots: [...slots].sort((a, b) => a.slot_time.localeCompare(b.slot_time)),
+      })
     }
   }
+  const dates = Array.from(dateMap.values())
 
   return { pricing, dates }
 }

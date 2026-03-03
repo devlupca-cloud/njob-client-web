@@ -117,12 +117,24 @@ serve(async (req) => {
         const nextM = String(nextMin % 60).padStart(2, "0");
         const nextTime = `${nextH}:${nextM}`;
 
-        const availId = (slotRow as any).availability_id;
+        const slotDate = (slotRow as any).availability.availability_date;
+        const slotCreatorId = (slotRow as any).availability.creator_id;
+
+        // Buscar TODOS os availability_ids do criador para esta data
+        const { data: avails } = await supabaseAdmin
+          .from("creator_availability")
+          .select("id")
+          .eq("creator_id", slotCreatorId)
+          .eq("availability_date", slotDate);
+
+        const availIds = (avails ?? []).map((a: any) => a.id);
+
         const { data: nextSlot, error: nextErr } = await supabaseAdmin
           .from("creator_availability_slots")
           .select("id, purchased")
-          .eq("availability_id", availId)
+          .in("availability_id", availIds)
           .like("slot_time", `${nextTime}%`)
+          .limit(1)
           .maybeSingle();
 
         if (nextErr || !nextSlot) {
@@ -211,6 +223,32 @@ serve(async (req) => {
     const stripeAccountId = payoutInfo.account_details?.stripe_account_id;
     if (!stripeAccountId) {
       throw new Error("ID da conta Stripe do criador não encontrado.");
+    }
+
+    // 3.1) VERIFICAR SE A CONTA PODE RECEBER PAGAMENTOS
+    const connectedAccount = await stripe.accounts.retrieve(stripeAccountId);
+    if (!connectedAccount.charges_enabled) {
+      const reason = connectedAccount.requirements?.disabled_reason || "verificação pendente";
+
+      // Atualizar status no banco para refletir a realidade
+      await supabaseAdmin
+        .from("creator_payout_info")
+        .update({
+          status: "PENDING",
+          account_details: {
+            ...payoutInfo.account_details,
+            charges_enabled: false,
+            payouts_enabled: connectedAccount.payouts_enabled ?? false,
+            details_submitted: connectedAccount.details_submitted ?? false,
+            disabled_reason: reason,
+            last_synced_at: new Date().toISOString(),
+          },
+        })
+        .eq("creator_id", creator_id);
+
+      throw new Error(
+        `A conta do criador não pode receber pagamentos no momento. Motivo: ${reason}. O criador precisa completar a verificação da conta Stripe.`,
+      );
     }
 
     // 4) DEFINIR PREÇO E LINE_ITEMS
@@ -342,19 +380,19 @@ serve(async (req) => {
       switch (product_type) {
         case "live":
         case "live_ticket":
-          success_url = "https://njob-client-web.vercel.app/lives/" + product_id;
+          success_url = "https://www.njob.com.br/purchases";
           break;
         case "video-call":
         case "pack":
-          success_url = "https://njob-client-web.vercel.app/purchases";
+          success_url = "https://www.njob.com.br/purchases";
           break;
         default:
-          success_url = "https://njob-client-web.vercel.app/";
+          success_url = "https://www.njob.com.br/purchases";
           break;
       }
     }
 
-    cancel_url = custom_cancel_url || "https://njob-client-web.vercel.app/";
+    cancel_url = custom_cancel_url || "https://www.njob.com.br/home";
 
     // 7) CRIAR CHECKOUT COMO DIRECT CHARGE NA CONTA CONECTADA
     const session = await stripe.checkout.sessions.create(
