@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import type { Creator } from '@/types'
 import CardCreator, { CardCreatorSkeleton } from '@/components/cards/CardCreator'
+import AgeVerificationModal, { useAgeVerification } from '@/components/ui/AgeVerificationModal'
 import { useTranslation } from 'react-i18next'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -38,19 +39,20 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   ])
 }
 
-async function fetchCreators(userId?: string): Promise<Creator[]> {
-  // Executar queries — cada uma com timeout e fallback independente
+async function fetchCreators(
+  filter: FilterKey,
+  search: string,
+  userId?: string,
+): Promise<Creator[]> {
   const rpcPromise = withTimeout(
-    Promise.resolve(supabase.rpc('get_creators_status')),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    Promise.resolve((supabase.rpc as any)('get_creators_filtered', {
+      p_filter: filter,
+      p_search: search.trim(),
+    })),
     15000,
   )
-  const profilesPromise = withTimeout(
-    Promise.resolve(supabase.from('profiles').select('id, is_active').eq('role', 'creator')),
-    10000,
-  ).catch((err) => {
-    console.warn('[HomePage] profiles query failed:', err)
-    return { data: null as null, error: err }
-  })
+
   const likesPromise = userId
     ? withTimeout(
         Promise.resolve(supabase.from('content_likes').select('creator_id').eq('client_id', userId)),
@@ -61,25 +63,13 @@ async function fetchCreators(userId?: string): Promise<Creator[]> {
       })
     : Promise.resolve({ data: [] as { creator_id: string }[], error: null })
 
-  const [rpcRes, profilesRes, likesRes] = await Promise.all([
-    rpcPromise,
-    profilesPromise,
-    likesPromise,
-  ])
+  const [rpcRes, likesRes] = await Promise.all([rpcPromise, likesPromise])
 
   if (rpcRes.error) {
-    console.error('[HomePage] RPC get_creators_status error:', rpcRes.error)
+    console.error('[HomePage] RPC get_creators_filtered error:', rpcRes.error)
     throw rpcRes.error
   }
   const rows = (rpcRes.data ?? []) as CreatorFromRPC[]
-
-  if (profilesRes.error) {
-    console.warn('[HomePage] profiles query error (using fallback):', profilesRes.error)
-  }
-  const activeMap = new Map<string, boolean>()
-  for (const p of (profilesRes.data ?? []) as { id: string; is_active: boolean | null }[]) {
-    activeMap.set(p.id, p.is_active ?? false)
-  }
 
   if (likesRes.error) {
     console.warn('[HomePage] likes query error (using fallback):', likesRes.error)
@@ -88,40 +78,30 @@ async function fetchCreators(userId?: string): Promise<Creator[]> {
     ((likesRes.data ?? []) as { creator_id: string }[]).map((l) => l.creator_id),
   )
 
-  return rows.map((row: CreatorFromRPC): Creator => {
-    // Se a RPC diz "em live", manter; senão usar is_active do profiles
-    const isActive = activeMap.get(row.id) ?? false
-    const status = row.status === 'em live'
-      ? 'em live'
-      : isActive
-        ? 'online'
-        : 'offline'
-
-    return {
-      id: row.id,
-      nome: row.nome,
-      status,
-      foto_perfil: row.foto_perfil,
-      data_criacao: row.data_criacao,
-      live_hoje: false,
-      live_horario: null,
-      vende_conteudo: row.vende_conteudo,
-      quantidade_likes: row.quantidade_likes,
-      faz_encontro_presencial: row.faz_encontro_presencial,
-      valor_1_hora: 0,
-      valor_30_min: 0,
-      faz_chamada_video: false,
-      genero: row.genero,
-      descricao: null,
-      imagens: [],
-      documents: [],
-      proxima_live: null,
-      curtiu: likedIds.has(row.id),
-      notificacoes: null,
-      favorito: false,
-      whatsapp: null,
-    }
-  })
+  return rows.map((row: CreatorFromRPC): Creator => ({
+    id: row.id,
+    nome: row.nome,
+    status: row.status,
+    foto_perfil: row.foto_perfil,
+    data_criacao: row.data_criacao,
+    live_hoje: false,
+    live_horario: null,
+    vende_conteudo: row.vende_conteudo,
+    quantidade_likes: row.quantidade_likes,
+    faz_encontro_presencial: row.faz_encontro_presencial,
+    valor_1_hora: 0,
+    valor_30_min: 0,
+    faz_chamada_video: false,
+    genero: row.genero,
+    descricao: null,
+    imagens: [],
+    documents: [],
+    proxima_live: null,
+    curtiu: likedIds.has(row.id),
+    notificacoes: null,
+    favorito: false,
+    whatsapp: null,
+  }))
 }
 
 // ─── Skeleton grid ────────────────────────────────────────────────────────────
@@ -203,6 +183,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export default function HomePage() {
   const { t } = useTranslation()
   const currentUser = useAuthStore((s) => s.profile)
+  const { verified: ageVerified, confirm: confirmAge } = useAgeVerification()
   const [search, setSearch] = useState('')
   const deferredSearch = useDeferredValue(search)
   const [activeFilter, setActiveFilter] = useState<FilterKey>('todos')
@@ -219,14 +200,18 @@ export default function HomePage() {
 
   const queryClient = useQueryClient()
 
+  const hasActiveFilterOrSearch = activeFilter !== 'todos' || deferredSearch.trim() !== ''
+
+  // Query filtrada pelo backend — refaz quando filtro, busca ou usuário mudam
   const { data: creators, isLoading, isError } = useQuery({
-    queryKey: ['creators', currentUser?.id ?? 'anon'],
-    queryFn: () => fetchCreators(currentUser?.id),
+    queryKey: ['creators', activeFilter, deferredSearch, currentUser?.id ?? 'anon'],
+    queryFn: () => fetchCreators(activeFilter, deferredSearch, currentUser?.id),
     placeholderData: keepPreviousData,
   })
 
+  // Seções da home (só usadas quando filtro = "todos" e sem busca)
   const sections = useMemo(() => {
-    if (!creators) return { popular: [], novos: [], online: [], emLive: [] }
+    if (!creators || hasActiveFilterOrSearch) return { popular: [], novos: [], online: [], emLive: [] }
 
     return {
       popular: [...creators].sort((a, b) => b.quantidade_likes - a.quantidade_likes).slice(0, 12),
@@ -234,46 +219,13 @@ export default function HomePage() {
       online: creators.filter((c) => c.status === 'online'),
       emLive: creators.filter((c) => c.status === 'em live'),
     }
-  }, [creators])
-
-  const filtered = useMemo(() => {
-    if (!creators) return []
-
-    let list = creators
-
-    const q = deferredSearch.trim().toLowerCase()
-    if (q) {
-      list = list.filter((c) => c.nome.toLowerCase().includes(q))
-    }
-
-    switch (activeFilter) {
-      case 'online':
-        list = list.filter((c) => c.status === 'online')
-        break
-      case 'lives':
-        list = list.filter((c) => c.status === 'em live')
-        break
-      case 'conteudo':
-        list = list.filter((c) => c.vende_conteudo)
-        break
-      case 'presencial':
-        list = list.filter((c) => c.faz_encontro_presencial)
-        break
-      case 'mulheres':
-        list = list.filter((c) => c.genero?.toLowerCase() === 'mulher')
-        break
-      case 'homens':
-        list = list.filter((c) => c.genero?.toLowerCase() === 'homem')
-        break
-    }
-
-    return list
-  }, [creators, deferredSearch, activeFilter])
-
-  const hasActiveFilterOrSearch = activeFilter !== 'todos' || deferredSearch.trim() !== ''
+  }, [creators, hasActiveFilterOrSearch])
 
   return (
     <div className="flex flex-col min-h-full bg-[hsl(var(--background))]">
+
+      {/* ── Age Verification ──────────────────────────────────────────────── */}
+      <AgeVerificationModal open={!ageVerified} onConfirm={confirmAge} />
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-10 bg-[hsl(var(--background))] border-b border-[hsl(var(--border))]">
@@ -349,11 +301,11 @@ export default function HomePage() {
         {!isLoading && !isError && (
           <>
             {hasActiveFilterOrSearch ? (
-              filtered.length === 0 ? (
+              !creators || creators.length === 0 ? (
                 <EmptyState query={search} />
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 p-4">
-                  {filtered.map((creator) => (
+                  {creators.map((creator) => (
                     <CardCreator key={creator.id} creator={creator} />
                   ))}
                 </div>

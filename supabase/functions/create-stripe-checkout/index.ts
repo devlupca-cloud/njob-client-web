@@ -77,7 +77,37 @@ serve(async (req) => {
       );
     }
 
-    // 2.1) VALIDAÇÕES DE VIDEO-CALL: slot já comprado + conflito com live
+    // 2.1) PACK: verificar se já foi comprado pelo usuário
+    if (product_type === "pack") {
+      const { data: existingPurchase } = await supabaseAdmin
+        .from("pack_purchases")
+        .select("id")
+        .eq("user_id", customerId)
+        .eq("pack_id", product_id)
+        .eq("status", "completed")
+        .maybeSingle();
+
+      if (existingPurchase) {
+        throw new Error("Você já comprou este pacote.");
+      }
+    }
+
+    // 2.2) LIVE TICKET: verificar se já foi comprado pelo usuário
+    if (product_type === "live_ticket") {
+      const { data: existingTicket } = await supabaseAdmin
+        .from("live_stream_tickets")
+        .select("id")
+        .eq("user_id", customerId)
+        .eq("live_stream_id", product_id)
+        .eq("status", "completed")
+        .maybeSingle();
+
+      if (existingTicket) {
+        throw new Error("Você já possui ingresso para esta live.");
+      }
+    }
+
+    // 2.3) VALIDAÇÕES DE VIDEO-CALL: slot já comprado + conflito com live
     if (product_type === "video-call") {
       if (!product_id) {
         throw new Error("product_id (slot_id) é obrigatório para video-call.");
@@ -116,6 +146,7 @@ serve(async (req) => {
         const nextH = String(Math.floor(nextMin / 60) % 24).padStart(2, "0");
         const nextM = String(nextMin % 60).padStart(2, "0");
         const nextTime = `${nextH}:${nextM}`;
+        const nextTimeFull = `${nextTime}:00`;
 
         const slotDate = (slotRow as any).availability.availability_date;
         const slotCreatorId = (slotRow as any).availability.creator_id;
@@ -129,20 +160,44 @@ serve(async (req) => {
 
         const availIds = (avails ?? []).map((a: any) => a.id);
 
+        // Buscar todos os slots desses availability_ids para debug
+        const { data: allSlots } = await supabaseAdmin
+          .from("creator_availability_slots")
+          .select("id, slot_time, purchased, availability_id")
+          .in("availability_id", availIds)
+          .order("slot_time", { ascending: true });
+
+        // Tentar match exato (HH:MM:SS) e também LIKE (HH:MM%)
         const { data: nextSlot, error: nextErr } = await supabaseAdmin
           .from("creator_availability_slots")
           .select("id, purchased")
           .in("availability_id", availIds)
-          .like("slot_time", `${nextTime}%`)
+          .eq("slot_time", nextTimeFull)
           .limit(1)
           .maybeSingle();
 
-        if (nextErr || !nextSlot) {
+        // Fallback: tentar com LIKE caso formato seja diferente
+        let finalSlot = nextSlot;
+        let finalErr = nextErr;
+        if (!nextSlot && !nextErr) {
+          const { data: nextSlotLike, error: nextErrLike } = await supabaseAdmin
+            .from("creator_availability_slots")
+            .select("id, purchased")
+            .in("availability_id", availIds)
+            .like("slot_time", `${nextTime}%`)
+            .limit(1)
+            .maybeSingle();
+          finalSlot = nextSlotLike;
+          finalErr = nextErrLike;
+        }
+
+        if (finalErr || !finalSlot) {
+          const slotTimes = (allSlots ?? []).map((s: any) => `${s.slot_time}(purchased=${s.purchased})`).join(", ");
           throw new Error(
-            `Horário seguinte (${nextTime}) não disponível para chamada de 60 min.`,
+            `Horário seguinte (${nextTime}) não encontrado. Slots disponíveis: [${slotTimes}]. availIds: [${availIds.join(",")}]. slotDate: ${slotDate}. err: ${finalErr?.message ?? "null"}`,
           );
         }
-        if (nextSlot.purchased) {
+        if (finalSlot.purchased) {
           throw new Error(
             `Horário seguinte (${nextTime}) já reservado. Não é possível agendar 60 min.`,
           );

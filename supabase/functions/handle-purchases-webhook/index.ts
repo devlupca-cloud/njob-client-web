@@ -326,32 +326,58 @@ async function handlePaymentCheckoutCompleted(session: any, connectedAccountId?:
     throw new Error("Falha ao obter transactionId após upsert");
   }
 
-  // Registro especifico da compra
+  // Registro especifico da compra (com verificação de duplicidade)
   if (product_type === "pack") {
-    const { error } = await supabaseAdmin.from("pack_purchases").insert({
-      user_id: customerId,
-      pack_id: product_id,
-      purchase_price: amount,
-      currency,
-      status: "completed",
-      transaction_id: transactionId,
-      platform_fee: platformFee,
-      creator_share: creatorShare,
-    });
-    if (error) throw error;
-  } else if (product_type === "live_ticket") {
-    const { error } = await supabaseAdmin
-      .from("live_stream_tickets")
-      .insert({
+    // Verificar se já existe compra completada para este pack + usuário
+    const { data: existingPack } = await supabaseAdmin
+      .from("pack_purchases")
+      .select("id")
+      .eq("user_id", customerId)
+      .eq("pack_id", product_id)
+      .eq("status", "completed")
+      .maybeSingle();
+
+    if (existingPack) {
+      console.warn(`[webhook] Pack ${product_id} já comprado por ${customerId} — ignorando duplicata`);
+    } else {
+      const { error } = await supabaseAdmin.from("pack_purchases").insert({
         user_id: customerId,
-        live_stream_id: product_id,
+        pack_id: product_id,
         purchase_price: amount,
+        currency,
         status: "completed",
         transaction_id: transactionId,
         platform_fee: platformFee,
         creator_share: creatorShare,
       });
-    if (error) throw error;
+      if (error) throw error;
+    }
+  } else if (product_type === "live_ticket") {
+    // Verificar se já existe ticket para esta live + usuário
+    const { data: existingTicket } = await supabaseAdmin
+      .from("live_stream_tickets")
+      .select("id")
+      .eq("user_id", customerId)
+      .eq("live_stream_id", product_id)
+      .eq("status", "completed")
+      .maybeSingle();
+
+    if (existingTicket) {
+      console.warn(`[webhook] Live ticket ${product_id} já comprado por ${customerId} — ignorando duplicata`);
+    } else {
+      const { error } = await supabaseAdmin
+        .from("live_stream_tickets")
+        .insert({
+          user_id: customerId,
+          live_stream_id: product_id,
+          purchase_price: amount,
+          status: "completed",
+          transaction_id: transactionId,
+          platform_fee: platformFee,
+          creator_share: creatorShare,
+        });
+      if (error) throw error;
+    }
   } else if (product_type === "video-call") {
     if (!product_id) {
       throw new Error("product_id (slot_id) ausente em video-call metadata");
@@ -462,5 +488,90 @@ async function handlePaymentCheckoutCompleted(session: any, connectedAccountId?:
         .eq("id", slotId);
       throw new Error(`Erro ao criar registro de video-call: ${callErr.message}`);
     }
+  }
+
+  // ─── Notificar o creator sobre a venda ─────────────────────────────────────
+  await notifyCreatorOfSale(metaCreatorId, customerId, product_type, product_id, amount, currency);
+}
+
+/**
+ * Cria uma notificação para o creator informando sobre uma nova venda.
+ * Busca o nome do comprador para exibir na notificação.
+ */
+async function notifyCreatorOfSale(
+  creatorId: string | undefined,
+  buyerId: string,
+  productType: string,
+  productId: string,
+  amount: number,
+  currency: string,
+) {
+  if (!creatorId) {
+    console.warn("[webhook] creator_id ausente — notificação não criada");
+    return;
+  }
+
+  try {
+    // Buscar nome do comprador
+    const { data: buyer } = await supabaseAdmin
+      .from("profiles")
+      .select("full_name")
+      .eq("id", buyerId)
+      .single();
+
+    const buyerName = buyer?.full_name || "Um cliente";
+    const formattedAmount = `${currency} ${amount.toFixed(2).replace(".", ",")}`;
+
+    let title: string;
+    let message: string;
+    let type = "success";
+
+    switch (productType) {
+      case "pack": {
+        const { data: pack } = await supabaseAdmin
+          .from("packs")
+          .select("title")
+          .eq("id", productId)
+          .single();
+        title = "Nova venda de pacote!";
+        message = `${buyerName} comprou o pacote "${pack?.title || "Sem título"}" por ${formattedAmount}.`;
+        break;
+      }
+      case "live_ticket": {
+        const { data: live } = await supabaseAdmin
+          .from("live_streams")
+          .select("title")
+          .eq("id", productId)
+          .single();
+        title = "Novo ingresso vendido!";
+        message = `${buyerName} comprou ingresso para "${live?.title || "Live"}" por ${formattedAmount}.`;
+        break;
+      }
+      case "video-call":
+        title = "Nova videochamada agendada!";
+        message = `${buyerName} agendou uma videochamada por ${formattedAmount}.`;
+        break;
+      default:
+        title = "Nova venda!";
+        message = `${buyerName} realizou uma compra de ${formattedAmount}.`;
+    }
+
+    await supabaseAdmin.from("notifications").insert({
+      user_id: creatorId,
+      title,
+      message,
+      type,
+      is_read: false,
+      data: {
+        product_type: productType,
+        product_id: productId,
+        buyer_id: buyerId,
+        amount,
+        currency,
+      },
+    });
+  } catch (err) {
+    // Não falhar o webhook por causa de notificação
+    console.error("[webhook] Erro ao criar notificação para creator:", err);
   }
 }

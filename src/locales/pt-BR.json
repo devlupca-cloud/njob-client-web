@@ -166,6 +166,14 @@
     "sectionNew": "Novos na plataforma"
   },
 
+  "ageVerification": {
+    "title": "Confirmação de idade",
+    "description": "Este site contém conteúdo destinado exclusivamente para maiores de 18 anos. Ao continuar, você confirma que tem 18 anos ou mais.",
+    "confirm": "Tenho 18 anos ou mais",
+    "deny": "Sou menor de 18 anos",
+    "disclaimer": "Ao clicar em \"Tenho 18 anos ou mais\", você declara sob sua responsabilidade que possui idade legal para acessar este conteúdo."
+  },
+
   "profile": {
     "title": "Perfil",
     "changeAvatar": "Alterar foto de perfil",

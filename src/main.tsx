@@ -17,8 +17,8 @@ const queryClient = new QueryClient({
       refetchOnMount: true,             // refetch when component mounts (if stale)
       refetchOnWindowFocus: true,       // refetch when user returns to tab
       refetchOnReconnect: true,         // refetch after network reconnect
-      retry: 2,
-      retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10000),
+      retry: 3,                         // 3 retries — covers transient network failures
+      retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000), // 1s, 2s, 4s
     },
   },
 })
