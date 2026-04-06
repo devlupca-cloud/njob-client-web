@@ -60,6 +60,12 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
           if (session?.user) {
             const profile = await fetchProfileWithRetry(session.user.id)
             if (mounted) {
+              // Bloquear creators de logar no app do client
+              if (profile?.role === 'creator') {
+                toast({ title: 'Esta conta é de criador. Use o app de criadores para fazer login.', type: 'error' })
+                await supabase.auth.signOut()
+                return
+              }
               useAuthStore.getState().setProfile(profile)
               if (!profile) {
                 useAuthStore.getState().setProfileError(true)
@@ -94,6 +100,12 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
             store.setLoading(true)
             const profile = await fetchProfileWithRetry(session.user.id)
             if (mounted) {
+              // Bloquear creators de logar no app do client
+              if (profile?.role === 'creator') {
+                toast({ title: 'Esta conta é de criador. Use o app de criadores para fazer login.', type: 'error' })
+                await supabase.auth.signOut()
+                return
+              }
               useAuthStore.getState().setProfile(profile)
               if (!profile) {
                 useAuthStore.getState().setProfileError(true)
