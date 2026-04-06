@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
+import { useToast } from '@/components/ui/Toast'
 import type { Profile } from '@/types'
 
 /**
@@ -22,7 +23,7 @@ async function fetchProfileWithRetry(userId: string, retries = 3): Promise<Profi
     } catch (err) {
       console.warn(`[AuthProvider] fetchProfile attempt ${attempt}/${retries} failed:`, err)
       if (attempt < retries) {
-        await new Promise((r) => setTimeout(r, 500 * attempt)) // 500ms, 1s, 1.5s
+        await new Promise((r) => setTimeout(r, 1000 * attempt)) // 1s, 2s, 3s
       }
     }
   }
@@ -39,6 +40,7 @@ async function fetchProfileWithRetry(userId: string, retries = 3): Promise<Profi
  */
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient()
+  const { toast } = useToast()
 
   useEffect(() => {
     let mounted = true
@@ -57,7 +59,13 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
           if (session?.user) {
             const profile = await fetchProfileWithRetry(session.user.id)
-            if (mounted) useAuthStore.getState().setProfile(profile)
+            if (mounted) {
+              useAuthStore.getState().setProfile(profile)
+              if (!profile) {
+                useAuthStore.getState().setProfileError(true)
+                toast({ title: 'Não foi possível carregar seu perfil. Tente recarregar a página.', type: 'error' })
+              }
+            }
           }
 
           if (mounted) store.setLoading(false)
@@ -67,19 +75,29 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         // ─── SIGNED_OUT ────────────────────────────────────────────
         if (event === 'SIGNED_OUT') {
           store.clear()
+          store.setLoading(false)
           queryClient.clear()
           return
         }
 
         // ─── SIGNED_IN ─────────────────────────────────────────────
-        // User just logged in — invalidate all stale guest/previous cache
+        // User just logged in — block UI until profile is ready, then refetch all.
         if (event === 'SIGNED_IN') {
+          store.setLoading(true)
           store.setSession(session)
 
           if (session?.user) {
             const profile = await fetchProfileWithRetry(session.user.id)
-            if (mounted) useAuthStore.getState().setProfile(profile)
+            if (mounted) {
+              useAuthStore.getState().setProfile(profile)
+              if (!profile) {
+                useAuthStore.getState().setProfileError(true)
+                toast({ title: 'Não foi possível carregar seu perfil. Tente recarregar a página.', type: 'error' })
+              }
+            }
           }
+
+          if (mounted) store.setLoading(false)
 
           // Invalidate ALL queries so pages refetch with new userId
           queryClient.invalidateQueries()
@@ -92,7 +110,22 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         // Also invalidate queries to prevent stale auth errors.
         if (event === 'TOKEN_REFRESHED') {
           store.setSession(session)
-          queryClient.invalidateQueries()
+          // Only refetch active queries in background — don't clear cache
+          queryClient.invalidateQueries({ refetchType: 'active' })
+          return
+        }
+
+        // ─── PASSWORD_RECOVERY ──────────────────────────────────────
+        if (event === 'PASSWORD_RECOVERY') {
+          store.setSession(session)
+          if (session?.user) {
+            const profile = await fetchProfileWithRetry(session.user.id, 1)
+            if (mounted) useAuthStore.getState().setProfile(profile)
+          }
+          if (mounted) {
+            store.setLoading(false)
+            window.location.replace('/new-password')
+          }
           return
         }
 
@@ -118,14 +151,14 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         console.warn('[AuthProvider] INITIAL_SESSION timeout — forcing loading=false')
         store.setLoading(false)
       }
-    }, 5000)
+    }, 10000)
 
     return () => {
       mounted = false
       clearTimeout(timeout)
       subscription.unsubscribe()
     }
-  }, [queryClient])
+  }, [queryClient, toast])
 
   return <>{children}</>
 }

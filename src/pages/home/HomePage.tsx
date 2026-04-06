@@ -207,6 +207,7 @@ export default function HomePage() {
     queryKey: ['creators', activeFilter, deferredSearch, currentUser?.id ?? 'anon'],
     queryFn: () => fetchCreators(activeFilter, deferredSearch, currentUser?.id),
     placeholderData: keepPreviousData,
+    staleTime: 0,
   })
 
   // Seções da home (só usadas quando filtro = "todos" e sem busca)

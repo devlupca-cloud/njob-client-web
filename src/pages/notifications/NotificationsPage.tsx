@@ -173,9 +173,9 @@ function NotificationItem({ notification, onMarkRead, isMarkingRead }: Notificat
             {formatRelativeTime(notification.created_at)}
           </span>
         </div>
-        {notification.body && (
+        {notification.message && (
           <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))] leading-relaxed line-clamp-2">
-            {notification.body}
+            {notification.message}
           </p>
         )}
         {!notification.is_read && (

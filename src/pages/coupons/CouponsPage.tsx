@@ -13,7 +13,7 @@ import type { Coupon } from '@/types'
 async function fetchAvailableCoupons(): Promise<Coupon[]> {
   const { data, error } = await supabase.rpc('get_available_coupons')
   if (error) throw error
-  return (data ?? []) as Coupon[]
+  return (data ?? []) as unknown as Coupon[]
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

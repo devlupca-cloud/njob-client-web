@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next'
 
 export default function ChangeEmailPage() {
   const navigate = useNavigate()
-  const { user, profile, setProfile } = useAuthStore()
+  const { user } = useAuthStore()
   const { t } = useTranslation()
   const [serverError, setServerError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
@@ -48,9 +48,8 @@ export default function ChangeEmailPage() {
 
       if (error) throw error
 
-      if (profile) {
-        setProfile({ ...profile, email: data.email })
-      }
+      // Email is updated in auth.users, not profiles table
+      // Profile stays the same, but auth user email changes
 
       setSuccess(true)
     } catch (err) {

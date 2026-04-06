@@ -185,9 +185,9 @@ function ActiveSubscriptionCard({
         <p className="text-sm text-[hsl(var(--muted-foreground))]">
           {formatPlanPrice(plan.price_monthly ?? plan.price ?? 0, 'monthly')}
         </p>
-        {sub.expires_at && (
+        {sub.current_period_end && (
           <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-            {t('subscription.renewsAt', { date: sub.expires_at ? formatDate(sub.expires_at) : '—' })}
+            {t('subscription.renewsAt', { date: formatDate(sub.current_period_end) })}
           </p>
         )}
         <button

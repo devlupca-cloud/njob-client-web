@@ -1,5 +1,6 @@
-import { useEffect, useState, useRef } from 'react'
+import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import {
   User,
   Tag,
@@ -34,17 +35,20 @@ export default function ProfilePage() {
     { icon: Tag, label: t('profile.coupons'), path: '/coupons' },
   ]
 
-  useEffect(() => {
-    if (!user?.id) return
-    supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single()
-      .then(({ data }) => {
-        if (data) setProfile(data)
-      })
-  }, [user?.id])
+  useQuery({
+    queryKey: ['profile', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user!.id)
+        .single()
+      if (error) throw error
+      if (data) setProfile(data)
+      return data
+    },
+    enabled: !!user?.id,
+  })
 
   const handleAvatarClick = () => {
     fileInputRef.current?.click()
@@ -86,9 +90,10 @@ export default function ProfilePage() {
     }
   }
 
-  const handleLogout = async () => {
-    await signOut()
-    navigate('/login', { replace: true })
+  const handleLogout = () => {
+    signOut()
+    useAuthStore.getState().setGuest(true)
+    navigate('/home', { replace: true })
   }
 
   const displayName = profile?.full_name ?? user?.email?.split('@')[0] ?? t('common.user')

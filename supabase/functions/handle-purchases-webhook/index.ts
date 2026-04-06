@@ -328,6 +328,18 @@ async function handlePaymentCheckoutCompleted(session: any, connectedAccountId?:
 
   // Registro especifico da compra (com verificação de duplicidade)
   if (product_type === "pack") {
+    // Verificar ownership: o creator_id do metadata deve ser o dono do pack
+    if (metaCreatorId) {
+      const { data: packOwner } = await supabaseAdmin
+        .from("packs")
+        .select("profile_id")
+        .eq("id", product_id)
+        .single();
+      if (packOwner && packOwner.profile_id !== metaCreatorId) {
+        throw new Error(`creator_id ${metaCreatorId} não é dono do pack ${product_id}`);
+      }
+    }
+
     // Verificar se já existe compra completada para este pack + usuário
     const { data: existingPack } = await supabaseAdmin
       .from("pack_purchases")
@@ -353,6 +365,18 @@ async function handlePaymentCheckoutCompleted(session: any, connectedAccountId?:
       if (error) throw error;
     }
   } else if (product_type === "live_ticket") {
+    // Verificar ownership: o creator_id do metadata deve ser o dono da live
+    if (metaCreatorId) {
+      const { data: liveOwner } = await supabaseAdmin
+        .from("live_streams")
+        .select("creator_id")
+        .eq("id", product_id)
+        .single();
+      if (liveOwner && liveOwner.creator_id !== metaCreatorId) {
+        throw new Error(`creator_id ${metaCreatorId} não é dono da live ${product_id}`);
+      }
+    }
+
     // Verificar se já existe ticket para esta live + usuário
     const { data: existingTicket } = await supabaseAdmin
       .from("live_stream_tickets")

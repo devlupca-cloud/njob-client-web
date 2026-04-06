@@ -2,16 +2,13 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { AuthInput } from '@/components/ui/AuthInput'
 import { useTranslation } from 'react-i18next'
 
 export default function ForgotPasswordPage() {
-  const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
-  const prefillEmail = searchParams.get('email') ?? ''
-  const { sendPasswordResetOtp } = useAuth()
+  const { sendPasswordResetEmail } = useAuth()
   const { t } = useTranslation()
   const [serverError, setServerError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
@@ -28,22 +25,15 @@ export default function ForgotPasswordPage() {
   const {
     register,
     handleSubmit,
-    getValues,
     formState: { errors, isSubmitting },
-  } = useForm<FormData>({
-    resolver: zodResolver(schema),
-    defaultValues: { email: prefillEmail },
-  })
+  } = useForm<FormData>({ resolver: zodResolver(schema) })
 
   const onSubmit = async (data: FormData) => {
     setServerError(null)
     setSuccessMessage(null)
     try {
-      await sendPasswordResetOtp(data.email)
-      setSuccessMessage(t('auth.forgotPassword.codeSent'))
-      setTimeout(() => {
-        navigate(`/verify-otp?email=${encodeURIComponent(data.email)}`)
-      }, 1500)
+      await sendPasswordResetEmail(data.email)
+      setSuccessMessage(t('auth.forgotPassword.emailSent'))
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : t('auth.forgotPassword.genericError')
@@ -66,7 +56,7 @@ export default function ForgotPasswordPage() {
 
         {/* Back button */}
         <Link
-          to="/login"
+          to="/home"
           className="flex items-center gap-2 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors self-start"
         >
           <svg
@@ -83,7 +73,7 @@ export default function ForgotPasswordPage() {
             <path d="M19 12H5" />
             <path d="M12 19l-7-7 7-7" />
           </svg>
-          {t('auth.forgotPassword.backToLogin')}
+          {t('common.back')}
         </Link>
 
         {/* Header */}
@@ -194,23 +184,6 @@ export default function ForgotPasswordPage() {
             )}
           </button>
         </form>
-
-        {/* Manual navigate to OTP */}
-        <div className="text-center">
-          <p className="text-sm text-[hsl(var(--muted-foreground))]">
-            {t('auth.forgotPassword.haveCode')}{' '}
-            <button
-              type="button"
-              onClick={() => {
-                const email = getValues('email')
-                navigate(`/verify-otp${email ? `?email=${encodeURIComponent(email)}` : ''}`)
-              }}
-              className="font-semibold text-[hsl(var(--primary))] hover:text-[hsl(var(--primary)/0.8)] transition-colors"
-            >
-              {t('auth.forgotPassword.enterCode')}
-            </button>
-          </p>
-        </div>
       </div>
     </div>
   )

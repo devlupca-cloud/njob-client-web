@@ -23,7 +23,7 @@ interface SavedCard {
 
 async function fetchCard(id: string): Promise<SavedCard> {
   const { data, error } = await supabase
-    .from('saved_cards')
+    .from('saved_cards' as never)
     .select('*')
     .eq('id', id)
     .single()
@@ -33,6 +33,7 @@ async function fetchCard(id: string): Promise<SavedCard> {
 }
 
 async function deleteCard(id: string): Promise<void> {
+  // @ts-expect-error saved_cards table not in generated types
   const { error } = await supabase.from('saved_cards').delete().eq('id', id)
   if (error) throw error
 }

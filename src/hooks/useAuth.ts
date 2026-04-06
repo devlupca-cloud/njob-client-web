@@ -25,15 +25,13 @@ export function useAuth() {
     if (error) throw error
     setGuest(false)
 
-    if (data.user) {
-      const { error: profileError } = await supabase.from('profiles').insert({
-        id: data.user.id,
-        full_name: fullName,
-        role: 'consumer',
-        is_active: true,
-        ...(dateBirth ? { date_birth: dateBirth } : {}),
-      })
-      if (profileError) console.warn('Profile insert failed (trigger may handle it):', profileError)
+    // Profile is auto-created by on_auth_user_created trigger.
+    // Update extra fields (date_birth) that the trigger doesn't handle.
+    if (data.user && dateBirth) {
+      await supabase
+        .from('profiles')
+        .update({ date_birth: dateBirth })
+        .eq('id', data.user.id)
     }
   }
 
@@ -44,19 +42,10 @@ export function useAuth() {
     supabase.auth.signOut().catch(() => {})
   }
 
-  const sendPasswordResetOtp = async (email: string) => {
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { shouldCreateUser: false },
-    })
-    if (error) throw error
-  }
-
-  const verifyOtp = async (email: string, token: string) => {
-    const { error } = await supabase.auth.verifyOtp({
-      email,
-      token,
-      type: 'recovery',
+  const sendPasswordResetEmail = async (email: string) => {
+    const redirectTo = `${window.location.origin}/new-password`
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo,
     })
     if (error) throw error
   }
@@ -88,8 +77,7 @@ export function useAuth() {
     signIn,
     signUp,
     signOut,
-    sendPasswordResetOtp,
-    verifyOtp,
+    sendPasswordResetEmail,
     updatePassword,
   }
 }

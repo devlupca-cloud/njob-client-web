@@ -87,14 +87,13 @@ export interface Profile {
   full_name: string | null
   username: string | null
   avatar_url: string | null
-  email: string | null
   date_birth: string | null
-  role: 'consumer' | 'creator' | null
-  is_active: boolean
-  is_creator: boolean
-  is_online: boolean
-  created_at: string
-  updated_at: string
+  role: 'consumer' | 'creator' | 'admin'
+  is_active: boolean | null
+  created_at: string | null
+  updated_at: string | null
+  aprove: string | null
+  whatsapp: string | null
 }
 
 // ─── Packs ───────────────────────────────────────────────────────────────────
@@ -138,7 +137,7 @@ export interface Coupon {
   code: string
   discount_type: 'percentage' | 'fixed'
   discount_value: number
-  img_url: string | null
+  image_url: string | null
   store_name: string | null
   description: string | null
   valid_from: string | null
@@ -165,7 +164,7 @@ export interface Conversation {
   last_message: string | null
   last_message_at: string | null
   unread_count: number
-  creator: Pick<Profile, 'id' | 'full_name' | 'avatar_url' | 'is_online'>
+  creator: Pick<Profile, 'id' | 'full_name' | 'avatar_url'>
   client: Pick<Profile, 'id' | 'full_name' | 'avatar_url'>
 }
 
@@ -225,11 +224,15 @@ export interface SubscriptionPlan {
 export interface CreatorSubscription {
   id: string
   plan_id: string
-  client_id: string
   creator_id: string
-  status: 'active' | 'cancelled' | 'expired'
-  started_at: string
-  expires_at: string | null
+  status: string
+  current_period_start: string
+  current_period_end: string
+  cancel_at_period_end: boolean | null
+  cancelled_at: string | null
+  gateway_subscription_id: string | null
+  created_at: string | null
+  updated_at: string | null
 }
 
 // ─── Transactions ─────────────────────────────────────────────────────────────
@@ -250,10 +253,12 @@ export interface AppNotification {
   id: string
   user_id: string
   title: string
-  body: string
+  message: string | null
   type: 'success' | 'warning' | 'error' | 'info'
   is_read: boolean
   created_at: string
+  read_at: string | null
+  data: Record<string, unknown> | null
 }
 
 // ─── Availability ─────────────────────────────────────────────────────────────

@@ -96,7 +96,7 @@
     },
     "forgotPassword": {
       "title": "Recuperación de contraseña",
-      "subtitle": "Ingresa el correo registrado en tu cuenta. Te enviaremos un código para restablecer tu contraseña.",
+      "subtitle": "Ingresa el correo registrado en tu cuenta. Te enviaremos un enlace para restablecer tu contraseña.",
       "emailPlaceholder": "Ingresa tu correo",
       "submit": "Recuperar acceso",
       "submitting": "Enviando...",
@@ -104,6 +104,7 @@
       "haveCode": "¿Ya tienes el código?",
       "enterCode": "Ingresar código",
       "codeSent": "¡Código enviado! Revisa tu bandeja de entrada.",
+      "emailSent": "¡Enlace de recuperación enviado! Revisa tu bandeja de entrada.",
       "emailNotFound": "Correo no encontrado. Verifica e inténtalo de nuevo.",
       "genericError": "Error al enviar correo. Inténtalo de nuevo."
     },

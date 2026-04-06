@@ -96,7 +96,7 @@
     },
     "forgotPassword": {
       "title": "Password recovery",
-      "subtitle": "Enter the email registered to your account below. We will send a reset code.",
+      "subtitle": "Enter the email registered to your account below. We will send a reset link.",
       "emailPlaceholder": "Enter your email",
       "submit": "Recover access",
       "submitting": "Sending...",
@@ -104,6 +104,7 @@
       "haveCode": "Already have a code?",
       "enterCode": "Enter code",
       "codeSent": "Code sent! Check your inbox.",
+      "emailSent": "Recovery link sent! Check your inbox.",
       "emailNotFound": "Email not found. Please check and try again.",
       "genericError": "Failed to send email. Please try again."
     },

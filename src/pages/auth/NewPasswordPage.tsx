@@ -93,7 +93,7 @@ export default function NewPasswordPage() {
       setSuccessMessage(t('auth.newPassword.success'))
       setTimeout(async () => {
         await signOut()
-        navigate('/login', { replace: true })
+        navigate('/home', { replace: true })
       }, 1500)
     } catch (err: unknown) {
       const message =

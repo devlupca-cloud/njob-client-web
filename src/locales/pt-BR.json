@@ -96,7 +96,7 @@
     },
     "forgotPassword": {
       "title": "Recuperação de senha",
-      "subtitle": "Preencha o campo abaixo com o e-mail cadastrado na sua conta. Enviaremos um código para redefinição de senha.",
+      "subtitle": "Preencha o campo abaixo com o e-mail cadastrado na sua conta. Enviaremos um link para redefinição de senha.",
       "emailPlaceholder": "Digite seu e-mail",
       "submit": "Recuperar acesso",
       "submitting": "Enviando...",
@@ -104,6 +104,7 @@
       "haveCode": "Já tem o código?",
       "enterCode": "Inserir código",
       "codeSent": "Código enviado! Verifique sua caixa de entrada.",
+      "emailSent": "Link de recuperação enviado! Verifique sua caixa de entrada.",
       "emailNotFound": "E-mail não encontrado. Verifique e tente novamente.",
       "genericError": "Erro ao enviar e-mail. Tente novamente."
     },

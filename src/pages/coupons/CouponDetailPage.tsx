@@ -10,11 +10,14 @@ import type { Coupon } from '@/types'
 // ─── Fetch ────────────────────────────────────────────────────────────────────
 
 async function fetchCoupon(id: string): Promise<Coupon> {
-  const { data, error } = await supabase.rpc('get_available_coupons')
+  const { data, error } = await supabase
+    .from('coupons')
+    .select('id, code, discount_type, discount_value, image_url, store_name, description, valid_from, valid_until')
+    .eq('id', id)
+    .single()
   if (error) throw error
-  const coupon = (data ?? []).find((c: any) => c.id === id)
-  if (!coupon) throw new Error('Cupom não encontrado')
-  return coupon as Coupon
+  if (!data) throw new Error('Cupom não encontrado')
+  return data as Coupon
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

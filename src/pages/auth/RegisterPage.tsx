@@ -194,7 +194,7 @@ export default function RegisterPage() {
         {/* Login link */}
         <div className="text-center">
           <Link
-            to="/login"
+            to="/home"
             className="text-sm font-semibold text-[hsl(var(--primary))] hover:text-[hsl(var(--primary)/0.8)] transition-colors"
           >
             {t('auth.register.loginLink')}

@@ -1,5 +1,4 @@
 import { createContext, useCallback, useContext, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -14,7 +13,7 @@ import { useTranslation } from 'react-i18next'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type ModalView = 'choice' | 'login' | 'register'
+type ModalView = 'choice' | 'login' | 'register' | 'forgot-password'
 
 interface GuestModalContextValue {
   guardGuestAction: () => boolean
@@ -365,6 +364,126 @@ function RegisterForm({
   )
 }
 
+// ─── Forgot Password Form ───────────────────────────────────────────────────
+
+function ForgotPasswordForm({
+  onBack,
+}: {
+  onBack: () => void
+}) {
+  const { t } = useTranslation()
+  const { sendPasswordResetEmail } = useAuth()
+  const [serverError, setServerError] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
+
+  const schema = z.object({
+    email: z
+      .string()
+      .min(1, t('auth.register.emailRequired'))
+      .email(t('auth.register.emailInvalid')),
+  })
+
+  type FormData = z.infer<typeof schema>
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<FormData>({ resolver: zodResolver(schema) })
+
+  const onSubmit = async (data: FormData) => {
+    setServerError(null)
+    setSuccessMessage(null)
+    try {
+      await sendPasswordResetEmail(data.email)
+      setSuccessMessage(t('auth.forgotPassword.emailSent'))
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : t('auth.forgotPassword.genericError')
+      if (
+        message.toLowerCase().includes('not found') ||
+        message.toLowerCase().includes('user') ||
+        message.toLowerCase().includes('email')
+      ) {
+        setServerError(t('auth.forgotPassword.emailNotFound'))
+      } else {
+        setServerError(message)
+      }
+    }
+  }
+
+  return (
+    <div className="flex flex-col">
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-6">
+        <button
+          type="button"
+          onClick={onBack}
+          className="w-8 h-8 rounded-full bg-[hsl(var(--secondary))] flex items-center justify-center
+            text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
+        >
+          <ArrowLeft size={16} />
+        </button>
+        <div>
+          <h2 className="text-lg font-bold text-[hsl(var(--foreground))] leading-tight">
+            {t('auth.forgotPassword.title')}
+          </h2>
+          <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
+            {t('auth.forgotPassword.subtitle')}
+          </p>
+        </div>
+      </div>
+
+      <form
+        onSubmit={handleSubmit(onSubmit)}
+        className="flex flex-col gap-4"
+        noValidate
+      >
+        <AuthInput
+          label={t('common.email')}
+          type="email"
+          placeholder={t('auth.forgotPassword.emailPlaceholder')}
+          autoComplete="email"
+          autoCapitalize="none"
+          {...register('email')}
+          error={errors.email?.message}
+        />
+
+        {successMessage && (
+          <div className="flex items-start gap-2 bg-green-500/10 border border-green-500/30 rounded-xl px-3 py-2.5">
+            <p className="text-xs text-green-400">{successMessage}</p>
+          </div>
+        )}
+
+        {serverError && (
+          <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/30 rounded-xl px-3 py-2.5">
+            <p className="text-xs text-red-400">{serverError}</p>
+          </div>
+        )}
+
+        <button
+          type="submit"
+          disabled={isSubmitting || !!successMessage}
+          className="w-full h-11 rounded-xl font-semibold text-sm transition-all duration-200
+            bg-[hsl(var(--primary))] text-white hover:opacity-90 active:scale-[0.98]
+            disabled:opacity-50 disabled:cursor-not-allowed
+            flex items-center justify-center gap-2
+            shadow-[0_0_20px_hsl(var(--primary)/0.3)]"
+        >
+          {isSubmitting ? (
+            <>
+              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              {t('auth.forgotPassword.submitting')}
+            </>
+          ) : (
+            t('auth.forgotPassword.submit')
+          )}
+        </button>
+      </form>
+    </div>
+  )
+}
+
 // ─── Provider ────────────────────────────────────────────────────────────────
 
 export function GuestModalProvider({
@@ -374,7 +493,6 @@ export function GuestModalProvider({
 }) {
   const [open, setOpen] = useState(false)
   const [view, setView] = useState<ModalView>('choice')
-  const navigate = useNavigate()
   const { t } = useTranslation()
 
   const guardGuestAction = useCallback(() => {
@@ -393,9 +511,7 @@ export function GuestModalProvider({
   }
 
   const handleForgotPassword = () => {
-    setOpen(false)
-    setTimeout(() => setView('choice'), 200)
-    navigate('/forgot-password')
+    setView('forgot-password')
   }
 
   const handleOpenChange = (isOpen: boolean) => {
@@ -558,6 +674,21 @@ export function GuestModalProvider({
                     onBack={() => setView('choice')}
                     onSwitchToLogin={() => setView('login')}
                     onSuccess={handleSuccess}
+                  />
+                </>
+              )}
+
+              {/* ── Forgot Password View ── */}
+              {view === 'forgot-password' && (
+                <>
+                  <Dialog.Title className="sr-only">
+                    {t('auth.forgotPassword.title')}
+                  </Dialog.Title>
+                  <Dialog.Description className="sr-only">
+                    {t('auth.forgotPassword.subtitle')}
+                  </Dialog.Description>
+                  <ForgotPasswordForm
+                    onBack={() => setView('login')}
                   />
                 </>
               )}

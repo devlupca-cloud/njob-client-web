@@ -457,6 +457,7 @@ export default function PurchasesPage() {
     queryKey: ['purchases', userId],
     queryFn: () => fetchPurchases(userId!),
     enabled: !!userId,
+    refetchInterval: 60_000,
   })
 
   const counts = {

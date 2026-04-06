@@ -9,10 +9,8 @@ import { Loader2 } from 'lucide-react'
 import AppShell from '@/components/layout/AppShell'
 
 // Auth pages
-import LoginPage from '@/pages/auth/LoginPage'
 import RegisterPage from '@/pages/auth/RegisterPage'
 import ForgotPasswordPage from '@/pages/auth/ForgotPasswordPage'
-import VerifyOTPPage from '@/pages/auth/VerifyOTPPage'
 import NewPasswordPage from '@/pages/auth/NewPasswordPage'
 
 // App pages
@@ -103,16 +101,15 @@ export const router = createBrowserRouter([
         path: '/',
         element: <Navigate to="/home" replace />,
       },
-      // Guest-only routes (login, forgot password, etc.)
+      // Guest-only routes (forgot password)
       {
         element: <GuestGuard />,
         children: [
-          { path: '/login', element: <LoginPage /> },
           { path: '/forgot-password', element: <ForgotPasswordPage /> },
-          { path: '/verify-otp', element: <VerifyOTPPage /> },
-          { path: '/new-password', element: <NewPasswordPage /> },
         ],
       },
+      // Recovery route (user has a recovery session from email link)
+      { path: '/new-password', element: <NewPasswordPage /> },
       // Register: accessible by guests and unauthenticated, but not logged-in users
       {
         element: <RegisterGuard />,

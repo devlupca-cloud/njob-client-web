@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Search, X, MessageCircle } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
@@ -14,7 +14,6 @@ interface VwCreatorConversation {
   peer_id: string
   peer_name: string | null
   peer_avatar_url: string | null
-  peer_is_online: boolean | null
   last_message: string | null
   last_message_created_at: string | null
   last_message_time: string | null
@@ -69,11 +68,9 @@ function ConversationSkeleton() {
 function Avatar({
   url,
   name,
-  isOnline,
 }: {
   url: string | null
   name: string | null
-  isOnline: boolean | null
 }) {
   const initials = (name ?? '?')
     .split(' ')
@@ -95,9 +92,6 @@ function Avatar({
           {initials}
         </div>
       )}
-      {isOnline && (
-        <span className="absolute bottom-0.5 right-0.5 w-2.5 h-2.5 rounded-full bg-green-500 border-2 border-[hsl(var(--background))]" />
-      )}
     </div>
   )
 }
@@ -110,6 +104,8 @@ export default function ConversationsPage() {
   const { t } = useTranslation()
   const [search, setSearch] = useState('')
   const [isSearchOpen, setIsSearchOpen] = useState(false)
+
+  const queryClient = useQueryClient()
 
   const { data: conversations = [], isLoading } = useQuery({
     queryKey: ['vw_creator_conversations', user?.id],
@@ -127,6 +123,24 @@ export default function ConversationsPage() {
     enabled: !!user?.id,
   })
 
+  // Realtime: invalidar lista quando novas mensagens chegam
+  useEffect(() => {
+    if (!user?.id) return
+
+    const channel = supabase
+      .channel('conversations-realtime')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages', filter: `sender_id=neq.${user.id}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['vw_creator_conversations', user.id] })
+        },
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [user?.id, queryClient])
+
   const filtered = conversations.filter((c) => {
     if (!search.trim()) return true
     const name = (c.peer_name ?? '').toLowerCase()
@@ -141,7 +155,6 @@ export default function ConversationsPage() {
         peerId: conv.peer_id,
         peerName: conv.peer_name,
         peerAvatarUrl: conv.peer_avatar_url,
-        peerIsOnline: conv.peer_is_online,
       },
     })
   }
@@ -238,7 +251,6 @@ export default function ConversationsPage() {
                     <Avatar
                       url={conv.peer_avatar_url}
                       name={conv.peer_name}
-                      isOnline={conv.peer_is_online}
                     />
 
                     <div className="flex-1 min-w-0">

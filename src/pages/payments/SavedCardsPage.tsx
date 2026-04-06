@@ -24,7 +24,7 @@ interface SavedCard {
 
 async function fetchSavedCards(userId: string): Promise<SavedCard[]> {
   const { data, error } = await supabase
-    .from('saved_cards')
+    .from('saved_cards' as never)
     .select('*')
     .eq('user_id', userId)
     .order('is_default', { ascending: false })
@@ -35,7 +35,7 @@ async function fetchSavedCards(userId: string): Promise<SavedCard[]> {
 }
 
 async function deleteCard(id: string): Promise<void> {
-  const { error } = await supabase.from('saved_cards').delete().eq('id', id)
+  const { error } = await supabase.from('saved_cards' as never).delete().eq('id', id)
   if (error) throw error
 }
 

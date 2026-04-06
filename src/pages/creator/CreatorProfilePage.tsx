@@ -174,7 +174,7 @@ async function fetchCreatorProfile(
     throw rpcRes.error
   }
 
-  const d = rpcRes.data as GetCreatorDetailsRPCResult
+  const d = rpcRes.data as unknown as GetCreatorDetailsRPCResult
   if (!d?.success) {
     console.error('[CreatorProfile] RPC returned unsuccessful:', d)
     throw new Error(d?.message || 'Creator not found')
