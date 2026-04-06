@@ -358,8 +358,10 @@ async function handlePaymentCheckoutCompleted(session: any, connectedAccountId?:
 
     if (existingPack) {
       console.warn(`[webhook] Pack ${product_id} já comprado por ${customerId} — ignorando duplicata`);
+      // Garantir que a transação tenha o related_purchase_id mesmo em duplicata
+      await supabaseAdmin.from("transactions").update({ related_purchase_id: existingPack.id }).eq("id", transactionId);
     } else {
-      const { error } = await supabaseAdmin.from("pack_purchases").insert({
+      const { data: packRow, error } = await supabaseAdmin.from("pack_purchases").insert({
         user_id: customerId,
         pack_id: product_id,
         purchase_price: amount,
@@ -368,8 +370,13 @@ async function handlePaymentCheckoutCompleted(session: any, connectedAccountId?:
         transaction_id: transactionId,
         platform_fee: platformFee,
         creator_share: creatorShare,
-      });
+      }).select("id").single();
       if (error) throw error;
+
+      // Vincular transação à compra para que get_creator_metrics calcule faturamento
+      if (packRow) {
+        await supabaseAdmin.from("transactions").update({ related_purchase_id: packRow.id }).eq("id", transactionId);
+      }
     }
   } else if (product_type === "live_ticket") {
     // Verificar ownership: o creator_id do metadata deve ser o dono da live
@@ -395,8 +402,9 @@ async function handlePaymentCheckoutCompleted(session: any, connectedAccountId?:
 
     if (existingTicket) {
       console.warn(`[webhook] Live ticket ${product_id} já comprado por ${customerId} — ignorando duplicata`);
+      await supabaseAdmin.from("transactions").update({ related_ticket_id: existingTicket.id }).eq("id", transactionId);
     } else {
-      const { error } = await supabaseAdmin
+      const { data: ticketRow, error } = await supabaseAdmin
         .from("live_stream_tickets")
         .insert({
           user_id: customerId,
@@ -406,8 +414,14 @@ async function handlePaymentCheckoutCompleted(session: any, connectedAccountId?:
           transaction_id: transactionId,
           platform_fee: platformFee,
           creator_share: creatorShare,
-        });
+        })
+        .select("id").single();
       if (error) throw error;
+
+      // Vincular transação ao ticket para que get_creator_metrics calcule faturamento
+      if (ticketRow) {
+        await supabaseAdmin.from("transactions").update({ related_ticket_id: ticketRow.id }).eq("id", transactionId);
+      }
     }
   } else if (product_type === "video-call") {
     if (!product_id) {
@@ -495,7 +509,7 @@ async function handlePaymentCheckoutCompleted(session: any, connectedAccountId?:
     }
 
     // 2) Criar registro da chamada (slot já reservado)
-    const { error: callErr } = await supabaseAdmin
+    const { data: callRow, error: callErr } = await supabaseAdmin
       .from("one_on_one_calls")
       .insert({
         user_id: customerId,
@@ -509,7 +523,8 @@ async function handlePaymentCheckoutCompleted(session: any, connectedAccountId?:
         transaction_id: transactionId,
         platform_fee: platformFee,
         creator_share: creatorShare,
-      });
+      })
+      .select("id").single();
 
     if (callErr) {
       // Rollback: desfaz a reserva do slot
@@ -518,6 +533,11 @@ async function handlePaymentCheckoutCompleted(session: any, connectedAccountId?:
         .update({ purchased: false })
         .eq("id", slotId);
       throw new Error(`Erro ao criar registro de video-call: ${callErr.message}`);
+    }
+
+    // Vincular transação à chamada para que get_creator_metrics calcule faturamento
+    if (callRow) {
+      await supabaseAdmin.from("transactions").update({ related_call_id: callRow.id }).eq("id", transactionId);
     }
   }
 
