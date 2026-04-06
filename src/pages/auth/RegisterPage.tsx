@@ -12,6 +12,8 @@ export default function RegisterPage() {
   const { signUp } = useAuth()
   const { t } = useTranslation()
   const [serverError, setServerError] = useState<string | null>(null)
+  // Controla exibição do modal de e-mail já cadastrado
+  const [showEmailExistsModal, setShowEmailExistsModal] = useState(false)
 
   const schema = z
     .object({
@@ -74,6 +76,8 @@ export default function RegisterPage() {
         message.toLowerCase().includes('already exists') ||
         message.toLowerCase().includes('email')
       ) {
+        // Exibe o modal amigável em vez de apenas o erro inline
+        setShowEmailExistsModal(true)
         setServerError(t('auth.register.emailAlreadyUsed'))
       } else {
         setServerError(message)
@@ -201,6 +205,77 @@ export default function RegisterPage() {
           </Link>
         </div>
       </div>
+
+      {/* Modal: e-mail já cadastrado */}
+      {showEmailExistsModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="email-exists-title"
+        >
+          <div className="w-full max-w-sm rounded-2xl bg-[hsl(var(--card))] border border-[hsl(var(--border))] shadow-[0_24px_80px_rgba(0,0,0,0.5)] p-6 flex flex-col items-center gap-4">
+            {/* Ícone de alerta de e-mail */}
+            <div className="w-14 h-14 rounded-full bg-[hsl(var(--primary)/0.12)] flex items-center justify-center shrink-0">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="28"
+                height="28"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="text-[hsl(var(--primary))]"
+                aria-hidden="true"
+              >
+                <rect width="20" height="16" x="2" y="4" rx="2" />
+                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+              </svg>
+            </div>
+
+            {/* Título */}
+            <h2
+              id="email-exists-title"
+              className="text-lg font-bold text-[hsl(var(--foreground))] text-center leading-tight"
+            >
+              {t('auth.register.emailExistsModal.title')}
+            </h2>
+
+            {/* Mensagem */}
+            <p className="text-sm text-[hsl(var(--muted-foreground))] text-center leading-relaxed">
+              {t('auth.register.emailExistsModal.message')}
+            </p>
+
+            {/* Ações */}
+            <div className="flex flex-col gap-3 w-full mt-1">
+              {/* Botão primário: ir para login */}
+              <button
+                type="button"
+                onClick={() => navigate('/login')}
+                className="w-full h-11 rounded-[var(--radius)] font-semibold text-sm transition-all duration-200
+                  bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]
+                  hover:bg-[hsl(var(--primary)/0.9)] active:scale-[0.98]
+                  shadow-[0_0_20px_hsl(var(--primary)/0.3)]"
+              >
+                {t('auth.register.emailExistsModal.goToLogin')}
+              </button>
+
+              {/* Botão secundário: fechar e tentar outro e-mail */}
+              <button
+                type="button"
+                onClick={() => setShowEmailExistsModal(false)}
+                className="w-full h-11 rounded-[var(--radius)] font-semibold text-sm transition-all duration-200
+                  border border-[hsl(var(--border))] text-[hsl(var(--foreground))]
+                  hover:bg-[hsl(var(--secondary))] active:scale-[0.98]"
+              >
+                {t('auth.register.emailExistsModal.tryOtherEmail')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

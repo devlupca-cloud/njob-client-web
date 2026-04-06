@@ -92,7 +92,13 @@
       "confirmPasswordRequired": "Password confirmation is required",
       "passwordsMismatch": "Passwords do not match",
       "emailAlreadyUsed": "This email is already registered.",
-      "genericError": "Failed to create account. Please try again."
+      "genericError": "Failed to create account. Please try again.",
+      "emailExistsModal": {
+        "title": "Email already registered",
+        "message": "This email already has an account. Would you like to go to the login page?",
+        "goToLogin": "Go to login",
+        "tryOtherEmail": "Try another email"
+      }
     },
     "forgotPassword": {
       "title": "Password recovery",

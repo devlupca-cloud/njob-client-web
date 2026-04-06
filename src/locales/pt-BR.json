@@ -92,7 +92,13 @@
       "confirmPasswordRequired": "Confirmação de senha é obrigatória",
       "passwordsMismatch": "As senhas não coincidem",
       "emailAlreadyUsed": "Este e-mail já está cadastrado.",
-      "genericError": "Erro ao criar conta. Tente novamente."
+      "genericError": "Erro ao criar conta. Tente novamente.",
+      "emailExistsModal": {
+        "title": "E-mail já cadastrado",
+        "message": "Este e-mail já possui uma conta. Deseja ir para a tela de login?",
+        "goToLogin": "Ir para login",
+        "tryOtherEmail": "Tentar outro e-mail"
+      }
     },
     "forgotPassword": {
       "title": "Recuperação de senha",
