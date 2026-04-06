@@ -76,7 +76,9 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         if (event === 'SIGNED_OUT') {
           store.clear()
           store.setLoading(false)
-          queryClient.clear()
+          // Invalidar + remover cache antigo para refetch como guest
+          queryClient.removeQueries()
+          queryClient.invalidateQueries()
           return
         }
 
