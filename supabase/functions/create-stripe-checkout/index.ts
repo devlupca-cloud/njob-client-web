@@ -449,6 +449,23 @@ serve(async (req) => {
 
     cancel_url = custom_cancel_url || "https://www.njob.com.br/home";
 
+    // 6.1) BUSCAR EMAIL DO COMPRADOR para travar no checkout
+    // Isso impede que o link do Stripe seja usado por outra pessoa
+    const { data: buyerProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("email")
+      .eq("id", customerId)
+      .single();
+
+    // Fallback: buscar do auth.users se não tiver no profiles
+    let buyerEmail: string | undefined;
+    if (buyerProfile?.email) {
+      buyerEmail = buyerProfile.email;
+    } else {
+      const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(customerId);
+      buyerEmail = authUser?.user?.email ?? undefined;
+    }
+
     // 7) CRIAR CHECKOUT COMO DIRECT CHARGE NA CONTA CONECTADA
     const session = await stripe.checkout.sessions.create(
       {
@@ -458,6 +475,8 @@ serve(async (req) => {
         success_url,
         cancel_url,
         client_reference_id: customerId,
+        // Travar email do comprador — impede uso do link por terceiros
+        ...(buyerEmail ? { customer_email: buyerEmail } : {}),
         metadata: {
           product_id,
           product_type,
