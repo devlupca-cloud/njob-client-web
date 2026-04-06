@@ -89,9 +89,7 @@ export default function NewPasswordPage() {
       const { error } = await supabase.auth.updateUser({ password: data.newPassword })
       if (error) throw error
       setSuccessMessage(t('auth.newPassword.success'))
-      setTimeout(() => {
-        navigate('/home', { replace: true })
-      }, 1500)
+      navigate('/home', { replace: true })
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : t('auth.newPassword.genericError')
