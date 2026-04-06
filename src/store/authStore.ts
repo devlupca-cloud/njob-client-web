@@ -33,7 +33,7 @@ export const useAuthStore = create<AuthState>()(
       setLoading: (isLoading) => set({ isLoading }),
       setGuest: (isGuest) => set({ isGuest }),
       setProfileError: (profileError) => set({ profileError }),
-      clear: () => set({ session: null, user: null, profile: null, isLoading: true, isGuest: false, profileError: false }),
+      clear: () => set({ session: null, user: null, profile: null, isLoading: false, isGuest: false, profileError: false }),
     }),
     {
       name: 'njob-auth',

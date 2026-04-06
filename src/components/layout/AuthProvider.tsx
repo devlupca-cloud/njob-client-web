@@ -81,12 +81,15 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         }
 
         // ─── SIGNED_IN ─────────────────────────────────────────────
-        // User just logged in — block UI until profile is ready, then refetch all.
+        // Supabase fires SIGNED_IN both on real login AND on token refresh
+        // when the tab regains focus. Only block the UI for a real user change.
         if (event === 'SIGNED_IN') {
-          store.setLoading(true)
+          const isSameUser = store.user?.id === session?.user?.id
           store.setSession(session)
 
-          if (session?.user) {
+          if (session?.user && !isSameUser) {
+            // Real login (different user) — block UI until profile is ready
+            store.setLoading(true)
             const profile = await fetchProfileWithRetry(session.user.id)
             if (mounted) {
               useAuthStore.getState().setProfile(profile)
@@ -94,10 +97,9 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
                 useAuthStore.getState().setProfileError(true)
                 toast({ title: 'Não foi possível carregar seu perfil. Tente recarregar a página.', type: 'error' })
               }
+              store.setLoading(false)
             }
           }
-
-          if (mounted) store.setLoading(false)
 
           // Invalidate ALL queries so pages refetch with new userId
           queryClient.invalidateQueries()

@@ -3,7 +3,6 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '@/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import { AuthInput } from '@/components/ui/AuthInput'
 import { useTranslation } from 'react-i18next'
@@ -49,7 +48,6 @@ function PasswordStrengthBar({ password }: { password: string }) {
 
 export default function NewPasswordPage() {
   const navigate = useNavigate()
-  const { signOut } = useAuth()
   const { t } = useTranslation()
   const [serverError, setServerError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
@@ -91,8 +89,7 @@ export default function NewPasswordPage() {
       const { error } = await supabase.auth.updateUser({ password: data.newPassword })
       if (error) throw error
       setSuccessMessage(t('auth.newPassword.success'))
-      setTimeout(async () => {
-        await signOut()
+      setTimeout(() => {
         navigate('/home', { replace: true })
       }, 1500)
     } catch (err: unknown) {

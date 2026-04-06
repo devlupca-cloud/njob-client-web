@@ -268,7 +268,14 @@ function mapStripeStatus(stripeStatus: string): string {
 
 async function handlePaymentCheckoutCompleted(session: any, connectedAccountId?: string) {
   if (!connectedAccountId) {
-    console.warn("Webhook sem event.account — verifique se o endpoint ouve contas conectadas.");
+    console.error(
+      "ERRO: event.account ausente — este webhook DEVE ser registrado como Connect webhook no Stripe Dashboard " +
+      "(Connect > Webhooks), não como webhook da conta principal. Sem o connectedAccountId, não é possível " +
+      "recuperar o PaymentIntent da conta conectada."
+    );
+    throw new Error(
+      "event.account ausente — configure este endpoint como Connect webhook no Stripe Dashboard"
+    );
   }
 
   const {
