@@ -347,19 +347,16 @@ async function handlePaymentCheckoutCompleted(session: any, connectedAccountId?:
       }
     }
 
-    // Verificar se já existe compra completada para este pack + usuário
-    const { data: existingPack } = await supabaseAdmin
+    // Verificar idempotência por gateway_transaction_id (evita duplicata real de webhook retry)
+    const { data: existingByTx } = await supabaseAdmin
       .from("pack_purchases")
       .select("id")
-      .eq("user_id", customerId)
-      .eq("pack_id", product_id)
-      .eq("status", "completed")
+      .eq("transaction_id", transactionId)
       .maybeSingle();
 
-    if (existingPack) {
-      console.warn(`[webhook] Pack ${product_id} já comprado por ${customerId} — ignorando duplicata`);
-      // Garantir que a transação tenha o related_purchase_id mesmo em duplicata
-      await supabaseAdmin.from("transactions").update({ related_purchase_id: existingPack.id }).eq("id", transactionId);
+    if (existingByTx) {
+      console.warn(`[webhook] Pack purchase já existe para transaction ${transactionId} — ignorando retry`);
+      await supabaseAdmin.from("transactions").update({ related_purchase_id: existingByTx.id }).eq("id", transactionId);
     } else {
       const { data: packRow, error } = await supabaseAdmin.from("pack_purchases").insert({
         user_id: customerId,
