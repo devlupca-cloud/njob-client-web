@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import * as Dialog from '@radix-ui/react-dialog'
 import {
   X,
@@ -56,6 +57,7 @@ export default function BookingCallModal({
   pricePer1Hr,
 }: BookingCallModalProps) {
   const { session } = useAuthStore()
+  const navigate = useNavigate()
 
   const [duration, setDuration] = useState<Duration>(30)
   const [state, setState] = useState<FlowState>('idle')
@@ -87,6 +89,16 @@ export default function BookingCallModal({
         break
     }
   }, [call])
+
+  // Pagou → redireciona automaticamente pra sala após 1.5s (dá tempo de
+  // ver a tela de confirmação).
+  useEffect(() => {
+    if (state !== 'paid' || !callId) return
+    const t = setTimeout(() => {
+      navigate(`/calls/${callId}`)
+    }, 1500)
+    return () => clearTimeout(t)
+  }, [state, callId, navigate])
 
   useEffect(() => {
     if (isOpen) return
@@ -410,7 +422,7 @@ export default function BookingCallModal({
               </div>
             )}
 
-            {/* ── Paid ── */}
+            {/* ── Paid — auto-redirect pra sala ── */}
             {state === 'paid' && (
               <div className="flex flex-col items-center gap-3 py-6 text-center">
                 <div className="w-14 h-14 rounded-full bg-emerald-500/15 flex items-center justify-center">
@@ -420,15 +432,15 @@ export default function BookingCallModal({
                   Pagamento confirmado
                 </p>
                 <p className="text-sm text-[hsl(var(--muted-foreground))]">
-                  A sala já está liberada para ambos.
+                  Entrando na sala…
                 </p>
+                <Loader2 className="animate-spin text-[hsl(var(--primary))]" size={20} />
                 <a
                   href={`/calls/${callId}`}
-                  className="mt-3 inline-flex items-center justify-center gap-2 w-full
-                    rounded-xl py-3 text-sm font-semibold text-white
-                    bg-[hsl(var(--primary))] hover:brightness-110 transition-all"
+                  className="mt-2 inline-flex items-center justify-center gap-2 text-xs
+                    text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
                 >
-                  <Video size={16} /> Entrar na sala
+                  Clique aqui se não for redirecionado
                 </a>
               </div>
             )}

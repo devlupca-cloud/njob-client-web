@@ -47,7 +47,14 @@ export function useCallStatus(callId: string | null | undefined) {
       )
       .subscribe()
 
+    // Polling de segurança (3s): se o Realtime atrasar/falhar, a UI ainda
+    // reage em até 3s à transição de status (aceito → pago → etc).
+    const pollId = setInterval(() => {
+      void fetchNow()
+    }, 3000)
+
     return () => {
+      clearInterval(pollId)
       void supabase.removeChannel(channel)
     }
   }, [callId, fetchNow])
