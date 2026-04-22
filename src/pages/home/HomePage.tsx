@@ -78,30 +78,64 @@ async function fetchCreators(
     ((likesRes.data ?? []) as { creator_id: string }[]).map((l) => l.creator_id),
   )
 
-  return rows.map((row: CreatorFromRPC): Creator => ({
-    id: row.id,
-    nome: row.nome,
-    status: row.status,
-    foto_perfil: row.foto_perfil,
-    data_criacao: row.data_criacao,
-    live_hoje: false,
-    live_horario: null,
-    vende_conteudo: row.vende_conteudo,
-    quantidade_likes: row.quantidade_likes,
-    faz_encontro_presencial: row.faz_encontro_presencial,
-    valor_1_hora: 0,
-    valor_30_min: 0,
-    faz_chamada_video: false,
-    genero: row.genero,
-    descricao: null,
-    imagens: [],
-    documents: [],
-    proxima_live: null,
-    curtiu: likedIds.has(row.id),
-    notificacoes: null,
-    favorito: false,
-    whatsapp: null,
-  }))
+  // Novo fluxo: faz_chamada_video vem de profile_settings.sell_calls
+  // (creator_availability foi depreciado). Buscamos em batch pelos ids do RPC.
+  const ids = rows.map((r) => r.id)
+  let settingsMap = new Map<
+    string,
+    { sell_calls: boolean | null; call_per_30_min: number | null; call_per_1_hr: number | null }
+  >()
+  if (ids.length > 0) {
+    const { data: settings } = await supabase
+      .from('profile_settings')
+      .select('profile_id, sell_calls, call_per_30_min, call_per_1_hr')
+      .in('profile_id', ids)
+    if (settings) {
+      settingsMap = new Map(
+        (settings as Array<{
+          profile_id: string
+          sell_calls: boolean | null
+          call_per_30_min: number | null
+          call_per_1_hr: number | null
+        }>).map((s) => [
+          s.profile_id,
+          {
+            sell_calls: s.sell_calls,
+            call_per_30_min: s.call_per_30_min,
+            call_per_1_hr: s.call_per_1_hr,
+          },
+        ]),
+      )
+    }
+  }
+
+  return rows.map((row: CreatorFromRPC): Creator => {
+    const s = settingsMap.get(row.id)
+    return {
+      id: row.id,
+      nome: row.nome,
+      status: row.status,
+      foto_perfil: row.foto_perfil,
+      data_criacao: row.data_criacao,
+      live_hoje: false,
+      live_horario: null,
+      vende_conteudo: row.vende_conteudo,
+      quantidade_likes: row.quantidade_likes,
+      faz_encontro_presencial: row.faz_encontro_presencial,
+      valor_1_hora: Number(s?.call_per_1_hr ?? 0),
+      valor_30_min: Number(s?.call_per_30_min ?? 0),
+      faz_chamada_video: Boolean(s?.sell_calls),
+      genero: row.genero,
+      descricao: null,
+      imagens: [],
+      documents: [],
+      proxima_live: null,
+      curtiu: likedIds.has(row.id),
+      notificacoes: null,
+      favorito: false,
+      whatsapp: null,
+    }
+  })
 }
 
 // ─── Skeleton grid ────────────────────────────────────────────────────────────

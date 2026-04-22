@@ -114,7 +114,7 @@ async function fetchCreatorProfile(
   userId: string | undefined
 ): Promise<CreatorProfileData> {
   // Fetch tudo em paralelo (RPC + queries não dependem entre si)
-  const [rpcRes, packsRes, livesRes, subscribersRes, isSubscribedRes, profileRes, availabilityRes, purchasedPacksRes] = await Promise.all([
+  const [rpcRes, packsRes, livesRes, subscribersRes, isSubscribedRes, profileRes, availabilityRes, purchasedPacksRes, settingsRes] = await Promise.all([
     supabase.rpc('get_creator_details', {
       p_profile_id: profileId,
       p_client_id: userId ?? '00000000-0000-0000-0000-000000000000',
@@ -168,6 +168,12 @@ async function fetchCreatorProfile(
           .eq('user_id', userId)
           .eq('status', 'completed')
       : Promise.resolve({ data: [] as { pack_id: string }[], error: null }),
+    // profile_settings — fonte de verdade do novo fluxo (sell_calls + preços)
+    supabase
+      .from('profile_settings')
+      .select('sell_calls, call_per_30_min, call_per_1_hr')
+      .eq('profile_id', profileId)
+      .maybeSingle(),
   ])
 
   if (rpcRes.error) {
@@ -232,9 +238,13 @@ async function fetchCreatorProfile(
     vende_conteudo: d.vende_conteudo ?? false,
     quantidade_likes: d.quantidade_likes ?? 0,
     faz_encontro_presencial: d.faz_encontro_presencial ?? false,
-    valor_1_hora: d.valor_1_hora ?? 0,
-    valor_30_min: d.valor_30_min ?? 0,
-    faz_chamada_video: (d.faz_chamada_video ?? false) || (availabilityRes.count ?? 0) > 0,
+    valor_1_hora: Number(settingsRes.data?.call_per_1_hr ?? d.valor_1_hora ?? 0),
+    valor_30_min: Number(settingsRes.data?.call_per_30_min ?? d.valor_30_min ?? 0),
+    // Fonte no novo fluxo: profile_settings.sell_calls. Fallback para flag
+    // legada (d.faz_chamada_video) enquanto ainda houver dados antigos.
+    faz_chamada_video: Boolean(
+      settingsRes.data?.sell_calls ?? d.faz_chamada_video ?? false
+    ),
     genero: d.genero ?? null,
     descricao: desc
       ? {

@@ -54,10 +54,21 @@ interface CallPurchase {
   creator_id: string
   user_id: string
   created_at: string
-  scheduled_start_time: string
+  scheduled_start_time: string | null
   scheduled_duration_minutes: number
   call_price: number
-  status: 'pending' | 'confirmed' | 'completed' | 'cancelled'
+  status:
+    | 'requested'
+    | 'awaiting_payment'
+    | 'paid'
+    | 'confirmed'
+    | 'completed'
+    | 'cancelled_by_user'
+    | 'cancelled_by_creator'
+    | 'rejected'
+    | 'expired'
+  expires_at: string | null
+  paid_at: string | null
   profiles: {
     id: string
     full_name: string | null
@@ -145,9 +156,14 @@ const ENTRY_BUFFER_MIN = 5
 function callStatusClass(status: CallPurchase['status']): string {
   switch (status) {
     case 'completed': return 'text-green-400 bg-green-500/10'
+    case 'paid':
     case 'confirmed': return 'text-blue-400 bg-blue-500/10'
-    case 'pending': return 'text-yellow-400 bg-yellow-500/10'
-    case 'cancelled': return 'text-red-400 bg-red-500/10'
+    case 'requested':
+    case 'awaiting_payment': return 'text-yellow-400 bg-yellow-500/10'
+    case 'cancelled_by_user':
+    case 'cancelled_by_creator':
+    case 'rejected':
+    case 'expired': return 'text-red-400 bg-red-500/10'
     default: return 'text-[hsl(var(--muted-foreground))] bg-[hsl(var(--secondary))]'
   }
 }
@@ -330,12 +346,17 @@ function CallList({ calls, now, onTap }: { calls: CallPurchase[]; now: Date; onT
 
   function callStatusLabel(status: CallPurchase['status']): string {
     const map: Record<CallPurchase['status'], string> = {
-      pending: t('purchases.statuses.pending'),
+      requested: t('purchases.statuses.pending'),
+      awaiting_payment: t('purchases.statuses.pending'),
+      paid: t('purchases.statuses.confirmed'),
       confirmed: t('purchases.statuses.confirmed'),
       completed: t('purchases.statuses.done'),
-      cancelled: t('purchases.statuses.canceled'),
+      cancelled_by_user: t('purchases.statuses.canceled'),
+      cancelled_by_creator: t('purchases.statuses.canceled'),
+      rejected: t('purchases.statuses.canceled'),
+      expired: t('purchases.statuses.expired'),
     }
-    return map[status]
+    return map[status] ?? status
   }
 
   if (calls.length === 0) return <EmptyState tab="calls" />
@@ -344,18 +365,49 @@ function CallList({ calls, now, onTap }: { calls: CallPurchase[]; now: Date; onT
     <div className="flex flex-col gap-3">
       {calls.map((call) => {
         const creator = call.profiles
-        const startTime = new Date(call.scheduled_start_time)
-        const endTime = new Date(startTime.getTime() + call.scheduled_duration_minutes * 60_000)
-        const entryOpensAt = new Date(startTime.getTime() - ENTRY_BUFFER_MIN * 60_000)
 
-        const isExpired = (call.status === 'pending' || call.status === 'confirmed') && endTime < now
-        const isActive = call.status === 'pending' || call.status === 'confirmed'
-        const isInTimeWindow = now >= entryOpensAt && now <= endTime
-        const canEnter = isActive && !isExpired && isInTimeWindow
-        const isTooEarly = isActive && !isExpired && now < entryOpensAt
+        // Fluxo novo (paid): janela = paid_at + 2h, sem agendamento prévio.
+        // Legado (confirmed): janela = scheduled_start_time ± duration.
+        const POST_PAID_WINDOW_MS = 2 * 60 * 60 * 1000
+        const isPaidFlow = call.status === 'paid' && !!call.paid_at
+        const isLegacyConfirmed =
+          call.status === 'confirmed' && !!call.scheduled_start_time
 
-        // Countdown text for when it's too early
-        const remaining = isTooEarly ? countdownText(now, entryOpensAt) : null
+        const startTime = call.scheduled_start_time
+          ? new Date(call.scheduled_start_time)
+          : null
+        const endTime = startTime
+          ? new Date(startTime.getTime() + call.scheduled_duration_minutes * 60_000)
+          : null
+        const entryOpensAt = startTime
+          ? new Date(startTime.getTime() - ENTRY_BUFFER_MIN * 60_000)
+          : null
+
+        const paidAt = call.paid_at ? new Date(call.paid_at) : null
+        const paidWindowEnd = paidAt
+          ? new Date(paidAt.getTime() + POST_PAID_WINDOW_MS)
+          : null
+
+        // canEnter:
+        //  - paid + dentro de 2h após pagamento
+        //  - confirmed legado + dentro da janela de horário
+        const canEnter =
+          (isPaidFlow && paidWindowEnd && now <= paidWindowEnd) ||
+          (isLegacyConfirmed &&
+            entryOpensAt &&
+            endTime &&
+            now >= entryOpensAt &&
+            now <= endTime)
+
+        const isExpired =
+          (isPaidFlow && paidWindowEnd && now > paidWindowEnd) ||
+          (isLegacyConfirmed && endTime && now > endTime) ||
+          call.status === 'expired'
+
+        const isTooEarly =
+          isLegacyConfirmed && entryOpensAt && now < entryOpensAt
+
+        const remaining = isTooEarly && entryOpensAt ? countdownText(now, entryOpensAt) : null
 
         return (
           <button
@@ -385,13 +437,20 @@ function CallList({ calls, now, onTap }: { calls: CallPurchase[]; now: Date; onT
               <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
                 Compra: {formatDate(call.created_at)}
               </p>
-              <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
-                Chamada: {formatDate(call.scheduled_start_time)} às{' '}
-                {startTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                {' - '}
-                {endTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                {' · '}{call.scheduled_duration_minutes} min
-              </p>
+              {startTime && endTime && (
+                <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
+                  Chamada: {formatDate(startTime.toISOString())} às{' '}
+                  {startTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                  {' - '}
+                  {endTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                  {' · '}{call.scheduled_duration_minutes} min
+                </p>
+              )}
+              {!startTime && (
+                <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
+                  Duração: {call.scheduled_duration_minutes} min
+                </p>
+              )}
 
               {/* Status / time lock */}
               {isExpired && (
