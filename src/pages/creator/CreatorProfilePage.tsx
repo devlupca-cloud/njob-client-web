@@ -895,11 +895,12 @@ export default function CreatorProfilePage() {
       </div>
 
       {/* ── Action Buttons (Capabilities) ─────────────────────────────────── */}
-      {((creator.faz_chamada_video && creatorOnlineForCalls) || creator.faz_encontro_presencial || scheduledLives.length > 0 || activeLive) && (
+      {(creatorOnlineForCalls || creator.faz_encontro_presencial || scheduledLives.length > 0 || activeLive) && (
         <div className="px-4 mb-5 max-w-4xl mx-auto w-full">
           <div className="flex flex-col gap-2.5">
-            {/* Chamada Individual — só aparece quando creator está online */}
-            {creator.faz_chamada_video && creatorOnlineForCalls && (
+            {/* Chamada Individual — aparece quando creator está online.
+                A validação de sell_calls / preço ocorre no RPC fn_create_call_request. */}
+            {creatorOnlineForCalls && (
               <button
                 onClick={() => { if (!guardGuestAction()) setShowBookingModal(true) }}
                 className="flex items-center justify-center gap-3 w-full px-5 py-3.5 rounded-xl border-none"

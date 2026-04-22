@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import * as Dialog from '@radix-ui/react-dialog'
 import {
   X,
   Video,
@@ -9,7 +10,6 @@ import {
   Ban,
   TimerReset,
 } from 'lucide-react'
-import { useTranslation } from 'react-i18next'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { useCallStatus } from '@/hooks/useCallStatus'
@@ -55,7 +55,6 @@ export default function BookingCallModal({
   pricePer30Min,
   pricePer1Hr,
 }: BookingCallModalProps) {
-  const { t } = useTranslation()
   const { session } = useAuthStore()
 
   const [duration, setDuration] = useState<Duration>(30)
@@ -64,10 +63,8 @@ export default function BookingCallModal({
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
 
-  // Observa o status da call depois que é criada.
   const { call } = useCallStatus(callId)
 
-  // Reage à mudança de status (creator aceita / recusa / expira).
   useEffect(() => {
     if (!call) return
     switch (call.status) {
@@ -91,7 +88,6 @@ export default function BookingCallModal({
     }
   }, [call])
 
-  // Reset ao fechar.
   useEffect(() => {
     if (isOpen) return
     setState('idle')
@@ -100,7 +96,6 @@ export default function BookingCallModal({
     setDuration(30)
   }, [isOpen])
 
-  // Countdown local (expira 2 min após criação).
   useEffect(() => {
     if (state !== 'waiting_accept') return
     const interval = setInterval(() => setNow(Date.now()), 500)
@@ -115,11 +110,9 @@ export default function BookingCallModal({
   const price = duration === 30 ? pricePer30Min : pricePer1Hr
   const currentPrice = Number(call?.call_price ?? price ?? 0)
 
-  if (!isOpen) return null
-
   const handleRequest = async () => {
     if (!session?.user) {
-      setErrorMessage(t('booking.loginRequired') ?? 'Faça login para solicitar')
+      setErrorMessage('Faça login para solicitar videochamada')
       setState('error')
       return
     }
@@ -139,7 +132,7 @@ export default function BookingCallModal({
 
       const row = data as unknown as { id: string } | null
       if (!row?.id) {
-        setErrorMessage('Não foi possível criar a solicitação')
+        setErrorMessage('Não foi possível criar a solicitação.')
         setState('error')
         return
       }
@@ -172,7 +165,7 @@ export default function BookingCallModal({
       })
       const json = await res.json()
       if (!res.ok || !json?.checkoutUrl) {
-        setErrorMessage(json?.error ?? 'Falha ao iniciar pagamento')
+        setErrorMessage(json?.error ?? 'Falha ao iniciar pagamento.')
         setState('error')
         return
       }
@@ -183,7 +176,7 @@ export default function BookingCallModal({
     }
   }
 
-  const handleCancel = async () => {
+  const handleCancelRequest = async () => {
     if (!callId) {
       onClose()
       return
@@ -195,226 +188,293 @@ export default function BookingCallModal({
     onClose()
   }
 
+  const handleDialogChange = (open: boolean) => {
+    if (!open) {
+      if (state === 'waiting_accept' || state === 'awaiting_payment') {
+        void handleCancelRequest()
+      } else {
+        onClose()
+      }
+    }
+  }
+
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/60"
-    >
-      <div className="w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl p-6 shadow-2xl">
-        <div className="mb-5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            {avatarUrl ? (
-              <img
-                src={avatarUrl}
-                alt={creatorName}
-                className="h-10 w-10 rounded-full object-cover"
-              />
-            ) : (
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <Video size={20} />
+    <Dialog.Root open={isOpen} onOpenChange={handleDialogChange}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md" />
+        <Dialog.Content
+          className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
+            w-[calc(100%-2rem)] max-w-[420px] max-h-[90dvh]
+            rounded-2xl bg-[hsl(var(--card))] border border-[hsl(var(--border))]
+            shadow-[0_24px_80px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col"
+        >
+          <Dialog.Title className="sr-only">Solicitar videochamada</Dialog.Title>
+
+          {/* Close */}
+          <button
+            onClick={() => handleDialogChange(false)}
+            className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full
+              bg-[hsl(var(--secondary)/0.8)] backdrop-blur-sm
+              flex items-center justify-center
+              text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]
+              transition-colors"
+          >
+            <X size={15} />
+          </button>
+
+          <div className="flex-1 overflow-y-auto overscroll-contain p-6">
+            {/* Header creator */}
+            <div className="flex items-center gap-3 mb-6">
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt={creatorName}
+                  className="h-12 w-12 rounded-full object-cover border border-[hsl(var(--border))]"
+                />
+              ) : (
+                <div className="h-12 w-12 rounded-full bg-[hsl(var(--primary)/0.12)] flex items-center justify-center text-[hsl(var(--primary))]">
+                  <Video size={22} />
+                </div>
+              )}
+              <div className="min-w-0">
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                  Videochamada com
+                </p>
+                <p className="text-base font-semibold text-[hsl(var(--foreground))] truncate">
+                  {creatorName}
+                </p>
+              </div>
+            </div>
+
+            {/* ── Idle (escolher duração + solicitar) ── */}
+            {state === 'idle' && (
+              <div className="space-y-5">
+                <div>
+                  <p className="text-sm font-medium text-[hsl(var(--foreground))] mb-3">
+                    Escolha a duração
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {([30, 60] as Duration[]).map((opt) => {
+                      const optPrice = opt === 30 ? pricePer30Min : pricePer1Hr
+                      const disabled = !optPrice || Number(optPrice) <= 0
+                      const active = duration === opt
+                      return (
+                        <button
+                          key={opt}
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => setDuration(opt)}
+                          className={[
+                            'rounded-xl p-4 text-left transition-all border',
+                            active
+                              ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary)/0.08)]'
+                              : 'border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.4)] hover:border-[hsl(var(--primary)/0.5)]',
+                            disabled ? 'opacity-50 cursor-not-allowed' : '',
+                          ].join(' ')}
+                        >
+                          <p className="flex items-center gap-1 text-xs text-[hsl(var(--muted-foreground))]">
+                            <Clock size={12} />
+                            {opt === 60 ? '1 hora' : '30 minutos'}
+                          </p>
+                          <p className="mt-1 text-base font-semibold text-[hsl(var(--foreground))]">
+                            {optPrice ? formatCurrency(Number(optPrice)) : '—'}
+                          </p>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleRequest}
+                  disabled={!price || Number(price) <= 0}
+                  className="w-full rounded-xl py-3 text-sm font-semibold text-white
+                    bg-[hsl(var(--primary))] hover:brightness-110
+                    disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                >
+                  Solicitar videochamada
+                </button>
+
+                <p className="text-[11px] text-[hsl(var(--muted-foreground))] text-center">
+                  Você só paga após o creator aceitar a solicitação.
+                </p>
               </div>
             )}
-            <div>
-              <p className="text-sm text-gray-500">
-                {t('booking.title') ?? 'Videochamada com'}
-              </p>
-              <p className="text-base font-semibold text-gray-900">{creatorName}</p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={state === 'waiting_accept' ? handleCancel : onClose}
-            className="rounded-full p-1 text-gray-500 hover:bg-gray-100"
-          >
-            <X size={20} />
-          </button>
-        </div>
 
-        {state === 'idle' && (
-          <div className="space-y-5">
-            <div>
-              <p className="mb-2 text-sm font-medium text-gray-700">
-                {t('booking.chooseDuration') ?? 'Escolha a duração'}
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                {([30, 60] as Duration[]).map((opt) => {
-                  const optPrice = opt === 30 ? pricePer30Min : pricePer1Hr
-                  const disabled = !optPrice || Number(optPrice) <= 0
-                  return (
-                    <button
-                      key={opt}
-                      type="button"
-                      disabled={disabled}
-                      onClick={() => setDuration(opt)}
-                      className={[
-                        'rounded-xl border p-4 text-left transition-colors',
-                        duration === opt
-                          ? 'border-primary bg-primary/5'
-                          : 'border-gray-200 hover:border-gray-300',
-                        disabled ? 'opacity-50 cursor-not-allowed' : '',
-                      ].join(' ')}
-                    >
-                      <p className="text-xs text-gray-500">
-                        <Clock size={12} className="inline mr-1" />
-                        {opt === 60 ? '1 hora' : '30 minutos'}
-                      </p>
-                      <p className="mt-1 text-base font-semibold text-gray-900">
-                        {optPrice ? formatCurrency(Number(optPrice)) : '—'}
-                      </p>
-                    </button>
-                  )
-                })}
+            {/* ── Requesting (enviando) ── */}
+            {state === 'requesting' && (
+              <div className="flex flex-col items-center gap-3 py-10">
+                <Loader2 className="animate-spin text-[hsl(var(--primary))]" size={32} />
+                <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                  Enviando solicitação…
+                </p>
               </div>
-            </div>
+            )}
 
-            <button
-              type="button"
-              onClick={handleRequest}
-              disabled={!price || Number(price) <= 0}
-              className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-white disabled:opacity-50"
-            >
-              {t('booking.request') ?? 'Solicitar videochamada'}
-            </button>
-          </div>
-        )}
+            {/* ── Waiting accept ── */}
+            {state === 'waiting_accept' && (
+              <div className="flex flex-col items-center gap-4 py-6 text-center">
+                <div className="w-14 h-14 rounded-full bg-[hsl(var(--primary)/0.12)] flex items-center justify-center">
+                  <Loader2 className="animate-spin text-[hsl(var(--primary))]" size={28} />
+                </div>
+                <p className="text-base font-semibold text-[hsl(var(--foreground))]">
+                  Aguardando o creator aceitar…
+                </p>
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                  Expira em <span className="font-semibold text-[hsl(var(--foreground))]">{formatCountdown(countdownMs)}</span>
+                </p>
+                <button
+                  type="button"
+                  onClick={handleCancelRequest}
+                  className="mt-2 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
+                >
+                  Cancelar
+                </button>
+              </div>
+            )}
 
-        {state === 'requesting' && (
-          <div className="flex flex-col items-center gap-3 py-8">
-            <Loader2 className="animate-spin text-primary" size={32} />
-            <p className="text-sm text-gray-600">
-              {t('booking.sendingRequest') ?? 'Enviando solicitação…'}
-            </p>
-          </div>
-        )}
+            {/* ── Awaiting payment ── */}
+            {state === 'awaiting_payment' && (
+              <div className="flex flex-col items-center gap-4 py-4 text-center">
+                <div className="w-14 h-14 rounded-full bg-emerald-500/15 flex items-center justify-center">
+                  <CheckCircle2 className="text-emerald-400" size={32} />
+                </div>
+                <p className="text-base font-semibold text-[hsl(var(--foreground))]">
+                  Creator aceitou!
+                </p>
+                <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                  Finalize o pagamento para abrir a sala.
+                </p>
+                <button
+                  type="button"
+                  onClick={handlePay}
+                  className="w-full rounded-xl py-3 text-sm font-semibold text-white
+                    bg-[hsl(var(--primary))] hover:brightness-110 transition-all"
+                >
+                  Pagar {formatCurrency(currentPrice)}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCancelRequest}
+                  className="text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
+                >
+                  Cancelar
+                </button>
+              </div>
+            )}
 
-        {state === 'waiting_accept' && (
-          <div className="space-y-4 text-center py-4">
-            <Loader2 className="animate-spin text-primary mx-auto" size={32} />
-            <p className="text-sm font-medium text-gray-800">
-              {t('booking.waitingAccept') ?? 'Aguardando o creator aceitar…'}
-            </p>
-            <p className="text-xs text-gray-500">
-              {t('booking.countdown', { time: formatCountdown(countdownMs) }) ??
-                `Expira em ${formatCountdown(countdownMs)}`}
-            </p>
-            <button
-              type="button"
-              onClick={handleCancel}
-              className="text-sm text-red-600 hover:underline"
-            >
-              {t('common.cancel') ?? 'Cancelar'}
-            </button>
-          </div>
-        )}
+            {/* ── Rejected ── */}
+            {state === 'rejected' && (
+              <div className="flex flex-col items-center gap-3 py-8 text-center">
+                <div className="w-14 h-14 rounded-full bg-red-500/15 flex items-center justify-center">
+                  <Ban className="text-red-400" size={30} />
+                </div>
+                <p className="text-base font-semibold text-[hsl(var(--foreground))]">
+                  Solicitação recusada
+                </p>
+                <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                  O creator recusou sua solicitação desta vez.
+                </p>
+                <button
+                  onClick={onClose}
+                  className="mt-3 px-6 py-2 rounded-xl text-sm font-semibold
+                    bg-[hsl(var(--secondary))] text-[hsl(var(--foreground))]
+                    hover:bg-[hsl(var(--secondary)/0.8)] transition-colors"
+                >
+                  Fechar
+                </button>
+              </div>
+            )}
 
-        {state === 'awaiting_payment' && (
-          <div className="space-y-4 text-center py-2">
-            <CheckCircle2 className="text-emerald-500 mx-auto" size={40} />
-            <p className="text-base font-semibold text-gray-900">
-              {t('booking.accepted') ?? 'Creator aceitou!'}
-            </p>
-            <p className="text-sm text-gray-600">
-              {t('booking.payToJoin') ??
-                'Finalize o pagamento para liberar a sala.'}
-            </p>
-            <button
-              type="button"
-              onClick={handlePay}
-              className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-white"
-            >
-              {t('booking.payNow', { price: formatCurrency(currentPrice) }) ??
-                `Pagar ${formatCurrency(currentPrice)}`}
-            </button>
-            <button
-              type="button"
-              onClick={handleCancel}
-              className="text-sm text-gray-500 hover:underline"
-            >
-              {t('common.cancel') ?? 'Cancelar'}
-            </button>
-          </div>
-        )}
+            {/* ── Expired ── */}
+            {state === 'expired' && (
+              <div className="flex flex-col items-center gap-3 py-8 text-center">
+                <div className="w-14 h-14 rounded-full bg-amber-500/15 flex items-center justify-center">
+                  <TimerReset className="text-amber-400" size={30} />
+                </div>
+                <p className="text-base font-semibold text-[hsl(var(--foreground))]">
+                  Sem resposta do creator
+                </p>
+                <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                  A solicitação expirou antes de ser aceita. Tente novamente mais tarde.
+                </p>
+                <button
+                  onClick={onClose}
+                  className="mt-3 px-6 py-2 rounded-xl text-sm font-semibold
+                    bg-[hsl(var(--secondary))] text-[hsl(var(--foreground))]
+                    hover:bg-[hsl(var(--secondary)/0.8)] transition-colors"
+                >
+                  Fechar
+                </button>
+              </div>
+            )}
 
-        {state === 'rejected' && (
-          <div className="flex flex-col items-center gap-3 py-6 text-center">
-            <Ban className="text-red-500" size={40} />
-            <p className="text-base font-semibold text-gray-900">
-              {t('booking.rejected') ?? 'Solicitação recusada'}
-            </p>
-            <p className="text-sm text-gray-600">
-              {t('booking.rejectedDescription') ??
-                'O creator recusou sua solicitação.'}
-            </p>
-            <button
-              onClick={onClose}
-              className="mt-2 rounded-xl bg-gray-900 px-6 py-2 text-sm text-white"
-            >
-              {t('common.close') ?? 'Fechar'}
-            </button>
-          </div>
-        )}
+            {/* ── Paid ── */}
+            {state === 'paid' && (
+              <div className="flex flex-col items-center gap-3 py-6 text-center">
+                <div className="w-14 h-14 rounded-full bg-emerald-500/15 flex items-center justify-center">
+                  <CheckCircle2 className="text-emerald-400" size={32} />
+                </div>
+                <p className="text-base font-semibold text-[hsl(var(--foreground))]">
+                  Pagamento confirmado
+                </p>
+                <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                  A sala já está liberada para ambos.
+                </p>
+                <a
+                  href={`/calls/${callId}`}
+                  className="mt-3 inline-flex items-center justify-center gap-2 w-full
+                    rounded-xl py-3 text-sm font-semibold text-white
+                    bg-[hsl(var(--primary))] hover:brightness-110 transition-all"
+                >
+                  <Video size={16} /> Entrar na sala
+                </a>
+              </div>
+            )}
 
-        {state === 'expired' && (
-          <div className="flex flex-col items-center gap-3 py-6 text-center">
-            <TimerReset className="text-amber-500" size={40} />
-            <p className="text-base font-semibold text-gray-900">
-              {t('booking.expired') ?? 'Creator não respondeu a tempo'}
-            </p>
-            <button
-              onClick={onClose}
-              className="mt-2 rounded-xl bg-gray-900 px-6 py-2 text-sm text-white"
-            >
-              {t('common.close') ?? 'Fechar'}
-            </button>
-          </div>
-        )}
+            {/* ── Cancelled ── */}
+            {state === 'cancelled' && (
+              <div className="flex flex-col items-center gap-3 py-8 text-center">
+                <div className="w-14 h-14 rounded-full bg-[hsl(var(--secondary))] flex items-center justify-center">
+                  <Ban className="text-[hsl(var(--muted-foreground))]" size={28} />
+                </div>
+                <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                  Solicitação cancelada.
+                </p>
+                <button
+                  onClick={onClose}
+                  className="mt-3 px-6 py-2 rounded-xl text-sm font-semibold
+                    bg-[hsl(var(--secondary))] text-[hsl(var(--foreground))]
+                    hover:bg-[hsl(var(--secondary)/0.8)] transition-colors"
+                >
+                  Fechar
+                </button>
+              </div>
+            )}
 
-        {state === 'paid' && (
-          <div className="flex flex-col items-center gap-3 py-6 text-center">
-            <CheckCircle2 className="text-emerald-500" size={40} />
-            <p className="text-base font-semibold text-gray-900">
-              {t('booking.paid') ?? 'Pagamento confirmado'}
-            </p>
-            <a
-              href={`/calls/${callId}`}
-              className="mt-2 rounded-xl bg-primary px-6 py-2 text-sm font-semibold text-white"
-            >
-              {t('booking.enterRoom') ?? 'Entrar na sala'}
-            </a>
+            {/* ── Error ── */}
+            {state === 'error' && (
+              <div className="flex flex-col items-center gap-3 py-8 text-center">
+                <div className="w-14 h-14 rounded-full bg-red-500/15 flex items-center justify-center">
+                  <AlertCircle className="text-red-400" size={30} />
+                </div>
+                <p className="text-sm text-[hsl(var(--foreground))] break-words">
+                  {errorMessage ?? 'Algo deu errado.'}
+                </p>
+                <button
+                  onClick={onClose}
+                  className="mt-3 px-6 py-2 rounded-xl text-sm font-semibold
+                    bg-[hsl(var(--secondary))] text-[hsl(var(--foreground))]
+                    hover:bg-[hsl(var(--secondary)/0.8)] transition-colors"
+                >
+                  Fechar
+                </button>
+              </div>
+            )}
           </div>
-        )}
-
-        {state === 'cancelled' && (
-          <div className="flex flex-col items-center gap-3 py-6 text-center">
-            <Ban className="text-gray-400" size={40} />
-            <p className="text-sm text-gray-600">
-              {t('booking.cancelled') ?? 'Solicitação cancelada'}
-            </p>
-            <button
-              onClick={onClose}
-              className="mt-2 rounded-xl bg-gray-900 px-6 py-2 text-sm text-white"
-            >
-              {t('common.close') ?? 'Fechar'}
-            </button>
-          </div>
-        )}
-
-        {state === 'error' && (
-          <div className="flex flex-col items-center gap-3 py-6 text-center">
-            <AlertCircle className="text-red-500" size={40} />
-            <p className="text-sm text-gray-700">
-              {errorMessage ?? t('common.error') ?? 'Algo deu errado'}
-            </p>
-            <button
-              onClick={onClose}
-              className="mt-2 rounded-xl bg-gray-900 px-6 py-2 text-sm text-white"
-            >
-              {t('common.close') ?? 'Fechar'}
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   )
 }
