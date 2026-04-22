@@ -12,6 +12,8 @@ import AppShell from '@/components/layout/AppShell'
 import RegisterPage from '@/pages/auth/RegisterPage'
 import ForgotPasswordPage from '@/pages/auth/ForgotPasswordPage'
 import NewPasswordPage from '@/pages/auth/NewPasswordPage'
+import TermsPage from '@/pages/legal/TermsPage'
+import PrivacyPage from '@/pages/legal/PrivacyPage'
 
 // App pages
 import HomePage from '@/pages/home/HomePage'
@@ -101,6 +103,9 @@ export const router = createBrowserRouter([
         path: '/',
         element: <Navigate to="/home" replace />,
       },
+      // Rotas legais públicas (acessíveis sem login)
+      { path: '/terms', element: <TermsPage /> },
+      { path: '/privacy', element: <PrivacyPage /> },
       // Guest-only routes (forgot password)
       {
         element: <GuestGuard />,

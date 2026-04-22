@@ -16,7 +16,13 @@ export function useAuth() {
     setGuest(false)
   }
 
-  const signUp = async (email: string, password: string, fullName: string, dateBirth?: string) => {
+  const signUp = async (
+    email: string,
+    password: string,
+    fullName: string,
+    dateBirth?: string,
+    legal?: { version: string; acceptedAt: string },
+  ) => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -26,12 +32,19 @@ export function useAuth() {
     setGuest(false)
 
     // Profile is auto-created by on_auth_user_created trigger.
-    // Update extra fields (date_birth) that the trigger doesn't handle.
-    if (data.user && dateBirth) {
-      await supabase
-        .from('profiles')
-        .update({ date_birth: dateBirth })
-        .eq('id', data.user.id)
+    // Update extra fields (date_birth, legal acceptance) that the trigger doesn't handle.
+    if (data.user) {
+      const updates: Record<string, unknown> = {}
+      if (dateBirth) updates.date_birth = dateBirth
+      if (legal) {
+        updates.terms_accepted_at = legal.acceptedAt
+        updates.terms_version = legal.version
+        updates.privacy_accepted_at = legal.acceptedAt
+        updates.privacy_version = legal.version
+      }
+      if (Object.keys(updates).length > 0) {
+        await supabase.from('profiles').update(updates).eq('id', data.user.id)
+      }
     }
   }
 

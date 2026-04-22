@@ -6,6 +6,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { AuthInput } from '@/components/ui/AuthInput'
 import { useTranslation } from 'react-i18next'
+import { LEGAL_VERSION } from '@/lib/legal/documents'
 
 export default function RegisterPage() {
   const navigate = useNavigate()
@@ -14,6 +15,7 @@ export default function RegisterPage() {
   const [serverError, setServerError] = useState<string | null>(null)
   // Controla exibição do modal de e-mail já cadastrado
   const [showEmailExistsModal, setShowEmailExistsModal] = useState(false)
+  const [legalAccepted, setLegalAccepted] = useState(false)
 
   const schema = z
     .object({
@@ -64,8 +66,17 @@ export default function RegisterPage() {
 
   const onSubmit = async (data: FormData) => {
     setServerError(null)
+    if (!legalAccepted) {
+      setServerError(
+        'Você precisa aceitar os Termos de Uso e a Política de Privacidade.',
+      )
+      return
+    }
     try {
-      await signUp(data.email, data.password, data.fullName, data.dateBirth)
+      await signUp(data.email, data.password, data.fullName, data.dateBirth, {
+        version: LEGAL_VERSION,
+        acceptedAt: new Date().toISOString(),
+      })
       navigate('/home', { replace: true })
     } catch (err: unknown) {
       const message =
@@ -173,10 +184,39 @@ export default function RegisterPage() {
             </div>
           )}
 
+          {/* Legal acceptance */}
+          <label className="flex items-start gap-2 text-sm text-[hsl(var(--muted-foreground))] cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={legalAccepted}
+              onChange={(e) => setLegalAccepted(e.target.checked)}
+              className="mt-1 w-4 h-4 accent-[hsl(var(--primary))]"
+            />
+            <span>
+              Li e concordo com os{' '}
+              <Link
+                to="/terms"
+                target="_blank"
+                className="text-[hsl(var(--primary))] underline underline-offset-2"
+              >
+                Termos de Uso
+              </Link>{' '}
+              e a{' '}
+              <Link
+                to="/privacy"
+                target="_blank"
+                className="text-[hsl(var(--primary))] underline underline-offset-2"
+              >
+                Política de Privacidade
+              </Link>
+              .
+            </span>
+          </label>
+
           {/* Submit */}
           <button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || !legalAccepted}
             className="w-full h-12 rounded-[var(--radius)] font-semibold text-sm transition-all duration-200
               bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]
               hover:bg-[hsl(var(--primary)/0.9)] active:scale-[0.98]
