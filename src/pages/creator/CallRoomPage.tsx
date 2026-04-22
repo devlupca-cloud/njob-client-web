@@ -13,9 +13,10 @@ interface CallInfo {
   id: string
   creator_id: string
   user_id: string
-  scheduled_start_time: string
+  scheduled_start_time: string | null
   scheduled_duration_minutes: number
   status: string
+  paid_at: string | null
   creator_name: string
 }
 
@@ -24,7 +25,7 @@ interface CallInfo {
 async function fetchCall(callId: string, userId: string): Promise<CallInfo> {
   const { data, error } = await supabase
     .from('one_on_one_calls')
-    .select('id, creator_id, user_id, scheduled_start_time, scheduled_duration_minutes, status, profiles!creator_id(full_name)')
+    .select('id, creator_id, user_id, scheduled_start_time, scheduled_duration_minutes, status, paid_at, profiles!creator_id(full_name)')
     .eq('id', callId)
     .single()
 
@@ -42,19 +43,37 @@ async function fetchCall(callId: string, userId: string): Promise<CallInfo> {
     scheduled_start_time: data.scheduled_start_time,
     scheduled_duration_minutes: data.scheduled_duration_minutes,
     status: data.status,
+    paid_at: (data as { paid_at?: string | null }).paid_at ?? null,
     creator_name: (data as any).profiles?.full_name ?? 'Creator',
   }
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function getCallWindow(call: CallInfo): 'open' | 'ended' {
-  const now = Date.now()
-  const start = new Date(call.scheduled_start_time).getTime()
-  const end = start + call.scheduled_duration_minutes * 60 * 1000
+type CallWindow = 'open' | 'ended' | 'not_ready'
 
-  if (now > end) return 'ended'
-  return 'open'
+const POST_PAID_WINDOW_MS = 2 * 60 * 60 * 1000
+const LEGACY_GRACE_MS = 5 * 60 * 1000
+
+function getCallWindow(call: CallInfo): CallWindow {
+  if (call.status === 'requested' || call.status === 'awaiting_payment') {
+    return 'not_ready'
+  }
+
+  if (call.status === 'paid' && call.paid_at) {
+    const paidAt = new Date(call.paid_at).getTime()
+    if (Date.now() > paidAt + POST_PAID_WINDOW_MS) return 'ended'
+    return 'open'
+  }
+
+  if (call.status === 'confirmed' && call.scheduled_start_time) {
+    const start = new Date(call.scheduled_start_time).getTime()
+    const end = start + call.scheduled_duration_minutes * 60 * 1000
+    if (Date.now() > end + LEGACY_GRACE_MS) return 'ended'
+    return 'open'
+  }
+
+  return 'ended'
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -102,9 +121,22 @@ export default function CallRoomPage() {
         turnOnMicrophoneWhenJoining: true,
         turnOnCameraWhenJoining: true,
         onLeaveRoom: () => {
+          void supabase
+            .from('one_on_one_calls')
+            .update({
+              status: 'completed',
+              actual_end_time: new Date().toISOString(),
+            })
+            .eq('id', call!.id)
           navigate('/purchases')
         },
       })
+
+      void supabase
+        .from('one_on_one_calls')
+        .update({ actual_start_time: new Date().toISOString() })
+        .eq('id', call!.id)
+        .is('actual_start_time', null)
 
       setJoined(true)
     }
@@ -148,6 +180,27 @@ export default function CallRoomPage() {
                 className="mt-4 text-sm text-[hsl(var(--primary))] underline"
               >
                 {t('callRoom.goToPurchases')}
+              </button>
+            </div>
+          </main>
+        </div>
+      )}
+
+      {/* Not-ready overlay: call ainda em requested/awaiting_payment */}
+      {!isLoading && !isError && callWindow === 'not_ready' && (
+        <div className="fixed inset-0 z-[60] bg-[hsl(var(--background))] flex flex-col min-h-screen">
+          <Header onBack={() => navigate(-1)} />
+          <main className="flex-1 flex items-center justify-center px-8">
+            <div className="text-center">
+              <Loader2 className="w-10 h-10 animate-spin text-[hsl(var(--primary))] mx-auto mb-3" />
+              <p className="text-sm font-medium text-[hsl(var(--foreground))]">
+                {t('callRoom.notReady') ?? 'Aguardando pagamento ser confirmado…'}
+              </p>
+              <button
+                onClick={() => navigate('/purchases')}
+                className="mt-6 px-6 py-2.5 rounded-xl bg-[hsl(var(--primary))] text-white text-sm font-semibold"
+              >
+                {t('callRoom.seePurchases') ?? 'Ver compras'}
               </button>
             </div>
           </main>

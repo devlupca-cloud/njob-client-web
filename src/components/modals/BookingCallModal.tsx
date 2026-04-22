@@ -1,33 +1,32 @@
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useEffect, useMemo, useState } from 'react'
 import {
   X,
   Video,
-  Calendar,
   Clock,
   Loader2,
   AlertCircle,
+  CheckCircle2,
+  Ban,
+  TimerReset,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
+import { useCallStatus } from '@/hooks/useCallStatus'
 import { formatCurrency } from '@/lib/utils'
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-interface AvailabilityDate {
-  id: string
-  availability_date: string
-  slots: AvailabilitySlot[]
-}
-
-interface AvailabilitySlot {
-  id: string
-  slot_time: string
-  purchased: boolean
-}
-
 type Duration = 30 | 60
+
+type FlowState =
+  | 'idle'
+  | 'requesting'
+  | 'waiting_accept'
+  | 'awaiting_payment'
+  | 'rejected'
+  | 'expired'
+  | 'cancelled'
+  | 'error'
+  | 'paid'
 
 interface BookingCallModalProps {
   isOpen: boolean
@@ -35,133 +34,17 @@ interface BookingCallModalProps {
   creatorId: string
   creatorName: string
   avatarUrl: string | null
+  pricePer30Min?: number | null
+  pricePer1Hr?: number | null
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function formatDateLabel(dateStr: string): string {
-  const date = new Date(dateStr + 'T12:00:00')
-  return date.toLocaleDateString('pt-BR', {
-    weekday: 'short',
-    day: '2-digit',
-    month: 'short',
-  })
+function formatCountdown(ms: number): string {
+  if (ms <= 0) return '0:00'
+  const total = Math.floor(ms / 1000)
+  const mm = Math.floor(total / 60)
+  const ss = total % 60
+  return `${mm}:${String(ss).padStart(2, '0')}`
 }
-
-function formatTime(time: string): string {
-  return time.slice(0, 5)
-}
-
-/** Returns the next 30-min slot time string (e.g. "01:00" → "01:30") */
-function nextSlotTime(slotTime: string): string {
-  const [hh, mm] = slotTime.split(':').map(Number)
-  const totalMin = hh * 60 + mm + 30
-  const h = String(Math.floor(totalMin / 60) % 24).padStart(2, '0')
-  const m = String(totalMin % 60).padStart(2, '0')
-  return `${h}:${m}`
-}
-
-/** Check if a slot time has already passed for a given date */
-function isSlotPast(dateStr: string, slotTime: string): boolean {
-  const now = new Date()
-  // Use local date (not UTC) — availability_date is stored as local date
-  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-  // Only check for today — future dates are never past
-  if (dateStr !== todayStr) return false
-  const [hh, mm] = slotTime.split(':').map(Number)
-  const slotDate = new Date(now)
-  slotDate.setHours(hh, mm, 0, 0)
-  return now > slotDate
-}
-
-// ─── Fetch ───────────────────────────────────────────────────────────────────
-
-async function fetchCallAvailability(creatorId: string) {
-  const [settingsRes, availabilityRes, livesRes] = await Promise.all([
-    supabase
-      .from('profile_settings')
-      .select('call_per_30_min, call_per_1_hr')
-      .eq('profile_id', creatorId)
-      .single(),
-    // Use local date (not UTC) — availability_date is stored as local date
-    (() => {
-      const now = new Date()
-      const localToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-      return supabase
-        .from('creator_availability')
-        .select('id, availability_date, creator_availability_slots(id, slot_time, purchased)')
-        .eq('creator_id', creatorId)
-        .gte('availability_date', localToday)
-        .order('availability_date', { ascending: true })
-    })(),
-    supabase
-      .from('live_streams')
-      .select('scheduled_start_time, estimated_duration_minutes')
-      .eq('creator_id', creatorId)
-      .in('status', ['scheduled', 'live'])
-      .gte('scheduled_start_time', new Date().toISOString())
-      .limit(30),
-  ])
-
-  const pricing = {
-    call_per_30_min: settingsRes.data?.call_per_30_min ?? 0,
-    call_per_1_hr: settingsRes.data?.call_per_1_hr ?? 0,
-  }
-
-  // Build blocked slots set from lives
-  const blockedSlots = new Set<string>()
-  for (const live of livesRes.data ?? []) {
-    const start = new Date(live.scheduled_start_time)
-    const durationMs = (live.estimated_duration_minutes ?? 60) * 60 * 1000
-    const end = new Date(start.getTime() + durationMs)
-    const dateKey = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`
-    let cursor = new Date(start)
-    while (cursor < end) {
-      const hh = String(cursor.getHours()).padStart(2, '0')
-      const mm = String(cursor.getMinutes()).padStart(2, '0')
-      blockedSlots.add(`${dateKey}_${hh}:${mm}`)
-      cursor = new Date(cursor.getTime() + 30 * 60 * 1000)
-    }
-  }
-
-  // Filter availability: remove purchased and live-blocked slots
-  // Merge slots from all availability records sharing the same date
-  const dateMap = new Map<string, AvailabilityDate>()
-  for (const av of availabilityRes.data ?? []) {
-    const slots = ((av as any).creator_availability_slots ?? [])
-      .filter((s: any) => {
-        if (s.purchased) return false
-        const timeKey = `${av.availability_date}_${formatTime(s.slot_time)}`
-        return !blockedSlots.has(timeKey)
-      })
-
-    if (slots.length === 0) continue
-
-    const existing = dateMap.get(av.availability_date)
-    if (existing) {
-      // Merge slots and deduplicate by time
-      const seenTimes = new Set(existing.slots.map((s) => formatTime(s.slot_time)))
-      for (const s of slots) {
-        if (!seenTimes.has(formatTime(s.slot_time))) {
-          existing.slots.push(s)
-          seenTimes.add(formatTime(s.slot_time))
-        }
-      }
-      existing.slots.sort((a, b) => a.slot_time.localeCompare(b.slot_time))
-    } else {
-      dateMap.set(av.availability_date, {
-        id: av.id,
-        availability_date: av.availability_date,
-        slots: [...slots].sort((a, b) => a.slot_time.localeCompare(b.slot_time)),
-      })
-    }
-  }
-  const dates = Array.from(dateMap.values())
-
-  return { pricing, dates }
-}
-
-// ─── Component ───────────────────────────────────────────────────────────────
 
 export default function BookingCallModal({
   isOpen,
@@ -169,291 +52,366 @@ export default function BookingCallModal({
   creatorId,
   creatorName,
   avatarUrl,
+  pricePer30Min,
+  pricePer1Hr,
 }: BookingCallModalProps) {
   const { t } = useTranslation()
-  const { user, session } = useAuthStore()
+  const { session } = useAuthStore()
 
-  const [selectedDate, setSelectedDate] = useState<string | null>(null)
-  const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlot | null>(null)
   const [duration, setDuration] = useState<Duration>(30)
-  const [isCheckingOut, setIsCheckingOut] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [state, setState] = useState<FlowState>('idle')
+  const [callId, setCallId] = useState<string | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [now, setNow] = useState(() => Date.now())
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['call-availability-modal', creatorId],
-    queryFn: () => fetchCallAvailability(creatorId),
-    enabled: isOpen && !!creatorId,
-  })
+  // Observa o status da call depois que é criada.
+  const { call } = useCallStatus(callId)
 
-  const selectedDateData = data?.dates.find((d) => d.availability_date === selectedDate)
-  const price = data?.pricing
-    ? duration === 60
-      ? data.pricing.call_per_1_hr
-      : data.pricing.call_per_30_min
-    : 0
-
-  const handleCheckout = async () => {
-    const userId = user?.id || session?.user?.id
-    if (!userId || !creatorId || !selectedSlot || !selectedDate) return
-
-    setIsCheckingOut(true)
-    setError(null)
-
-    try {
-      const { data: sessionData } = await supabase.auth.getSession()
-      const token = sessionData?.session?.access_token
-      if (!token) {
-        setError(t('auth.sessionExpired'))
-        return
-      }
-
-      const appUrl = (import.meta.env.VITE_APP_URL || window.location.origin).trim()
-
-      const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-stripe-checkout`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            creator_id: creatorId,
-            product_id: selectedSlot.id,
-            product_type: 'video-call',
-            duration,
-            success_url: `${appUrl}/purchases`,
-            cancel_url: `${appUrl}/home`,
-          }),
-        }
-      )
-
-      const json = await res.json()
-
-      if (!json.success || !json.checkoutUrl) {
-        throw new Error(json.error || 'Checkout error')
-      }
-
-      window.location.href = json.checkoutUrl
-    } catch (err: any) {
-      console.error('[BookingCallModal] Checkout error:', err)
-      setError(err?.message || t('booking.error'))
-    } finally {
-      setIsCheckingOut(false)
+  // Reage à mudança de status (creator aceita / recusa / expira).
+  useEffect(() => {
+    if (!call) return
+    switch (call.status) {
+      case 'awaiting_payment':
+        setState('awaiting_payment')
+        break
+      case 'paid':
+      case 'confirmed':
+        setState('paid')
+        break
+      case 'rejected':
+        setState('rejected')
+        break
+      case 'expired':
+        setState('expired')
+        break
+      case 'cancelled_by_user':
+      case 'cancelled_by_creator':
+        setState('cancelled')
+        break
     }
-  }
+  }, [call])
+
+  // Reset ao fechar.
+  useEffect(() => {
+    if (isOpen) return
+    setState('idle')
+    setCallId(null)
+    setErrorMessage(null)
+    setDuration(30)
+  }, [isOpen])
+
+  // Countdown local (expira 2 min após criação).
+  useEffect(() => {
+    if (state !== 'waiting_accept') return
+    const interval = setInterval(() => setNow(Date.now()), 500)
+    return () => clearInterval(interval)
+  }, [state])
+
+  const countdownMs = useMemo(() => {
+    if (!call?.expires_at) return 0
+    return new Date(call.expires_at).getTime() - now
+  }, [call, now])
+
+  const price = duration === 30 ? pricePer30Min : pricePer1Hr
+  const currentPrice = Number(call?.call_price ?? price ?? 0)
 
   if (!isOpen) return null
 
+  const handleRequest = async () => {
+    if (!session?.user) {
+      setErrorMessage(t('booking.loginRequired') ?? 'Faça login para solicitar')
+      setState('error')
+      return
+    }
+    setState('requesting')
+    setErrorMessage(null)
+    try {
+      const { data, error } = await supabase.rpc('fn_create_call_request', {
+        p_creator_id: creatorId,
+        p_duration_minutes: duration,
+      })
+
+      if (error) {
+        setErrorMessage(error.message)
+        setState('error')
+        return
+      }
+
+      const row = data as unknown as { id: string } | null
+      if (!row?.id) {
+        setErrorMessage('Não foi possível criar a solicitação')
+        setState('error')
+        return
+      }
+
+      setCallId(row.id)
+      setState('waiting_accept')
+    } catch (err) {
+      setErrorMessage((err as Error).message)
+      setState('error')
+    }
+  }
+
+  const handlePay = async () => {
+    if (!callId) return
+    try {
+      const apiUrl = import.meta.env.VITE_SUPABASE_URL as string
+      const res = await fetch(`${apiUrl}/functions/v1/create-stripe-checkout`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token ?? ''}`,
+        },
+        body: JSON.stringify({
+          creator_id: creatorId,
+          product_id: callId,
+          product_type: 'video-call-request',
+          success_url: `${window.location.origin}/calls/${callId}`,
+          cancel_url: `${window.location.origin}/creator/${creatorId}`,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok || !json?.checkoutUrl) {
+        setErrorMessage(json?.error ?? 'Falha ao iniciar pagamento')
+        setState('error')
+        return
+      }
+      window.location.href = json.checkoutUrl
+    } catch (err) {
+      setErrorMessage((err as Error).message)
+      setState('error')
+    }
+  }
+
+  const handleCancel = async () => {
+    if (!callId) {
+      onClose()
+      return
+    }
+    await supabase
+      .from('one_on_one_calls')
+      .update({ status: 'cancelled_by_user' })
+      .eq('id', callId)
+    onClose()
+  }
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/60"
     >
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-
-      {/* Modal */}
-      <div
-        className="relative w-full sm:max-w-lg max-h-[85vh] bg-[hsl(var(--background))] rounded-t-2xl sm:rounded-2xl overflow-hidden flex flex-col animate-in slide-in-from-bottom duration-300"
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[hsl(var(--border))]">
+      <div className="w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl p-6 shadow-2xl">
+        <div className="mb-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full overflow-hidden bg-[hsl(var(--secondary))] shrink-0">
-              {avatarUrl ? (
-                <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  <Video size={18} className="text-[hsl(var(--muted-foreground))]" />
-                </div>
-              )}
-            </div>
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt={creatorName}
+                className="h-10 w-10 rounded-full object-cover"
+              />
+            ) : (
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <Video size={20} />
+              </div>
+            )}
             <div>
-              <p className="text-sm font-semibold text-[hsl(var(--foreground))]">{creatorName}</p>
-              <p className="text-xs text-[hsl(var(--muted-foreground))]">{t('creator.videoCall')}</p>
+              <p className="text-sm text-gray-500">
+                {t('booking.title') ?? 'Videochamada com'}
+              </p>
+              <p className="text-base font-semibold text-gray-900">{creatorName}</p>
             </div>
           </div>
           <button
-            onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-full bg-[hsl(var(--secondary))] text-[hsl(var(--foreground))]"
+            type="button"
+            onClick={state === 'waiting_accept' ? handleCancel : onClose}
+            className="rounded-full p-1 text-gray-500 hover:bg-gray-100"
           >
-            <X size={16} />
+            <X size={20} />
           </button>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-7 h-7 animate-spin text-[hsl(var(--primary))]" />
-            </div>
-          ) : !data || data.dates.length === 0 ? (
-            <div className="py-10 text-center">
-              <Calendar className="w-10 h-10 text-[hsl(var(--muted-foreground))] mx-auto mb-3 opacity-40" />
-              <p className="text-sm text-[hsl(var(--muted-foreground))]">
-                {t('booking.noSlots')}
+        {state === 'idle' && (
+          <div className="space-y-5">
+            <div>
+              <p className="mb-2 text-sm font-medium text-gray-700">
+                {t('booking.chooseDuration') ?? 'Escolha a duração'}
               </p>
-            </div>
-          ) : (
-            <>
-              {/* Duration */}
-              <div>
-                <label className="text-xs font-medium text-[hsl(var(--muted-foreground))] uppercase tracking-wider mb-2 block">
-                  <Clock size={12} className="inline mr-1.5" />
-                  {t('booking.duration')}
-                </label>
-                <div className="flex gap-2">
-                  {([30, 60] as Duration[]).map((d) => {
-                    const p = d === 60 ? data.pricing.call_per_1_hr : data.pricing.call_per_30_min
-                    return (
-                      <button
-                        key={d}
-                        onClick={() => { setDuration(d); setSelectedSlot(null) }}
-                        className={`flex-1 py-3 rounded-xl text-sm font-medium transition-colors border ${
-                          duration === d
-                            ? 'bg-[hsl(var(--primary))] text-white border-[hsl(var(--primary))]'
-                            : 'bg-[hsl(var(--card))] text-[hsl(var(--foreground))] border-[hsl(var(--border))]'
-                        }`}
-                      >
-                        {d} min
-                        {p > 0 && (
-                          <span className="block text-xs mt-0.5 opacity-80">
-                            {formatCurrency(p)}
-                          </span>
-                        )}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* Dates */}
-              <div>
-                <label className="text-xs font-medium text-[hsl(var(--muted-foreground))] uppercase tracking-wider mb-2 block">
-                  <Calendar size={12} className="inline mr-1.5" />
-                  {t('booking.availableDate')}
-                </label>
-                <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1">
-                  {data.dates.map((d) => {
-                    const futureSlots = d.slots.filter((s) => !isSlotPast(d.availability_date, s.slot_time))
-                    let futureCount = futureSlots.length
-                    if (duration === 60) {
-                      const times = new Set(futureSlots.map((s) => formatTime(s.slot_time)))
-                      futureCount = futureSlots.filter((s) => times.has(nextSlotTime(formatTime(s.slot_time)))).length
-                    }
-                    return (
+              <div className="grid grid-cols-2 gap-3">
+                {([30, 60] as Duration[]).map((opt) => {
+                  const optPrice = opt === 30 ? pricePer30Min : pricePer1Hr
+                  const disabled = !optPrice || Number(optPrice) <= 0
+                  return (
                     <button
-                      key={d.id}
-                      onClick={() => { setSelectedDate(d.availability_date); setSelectedSlot(null); setError(null) }}
-                      className={`shrink-0 px-4 py-2.5 rounded-xl text-xs font-medium transition-colors border ${
-                        selectedDate === d.availability_date
-                          ? 'bg-[hsl(var(--primary))] text-white border-[hsl(var(--primary))]'
-                          : 'bg-[hsl(var(--card))] text-[hsl(var(--foreground))] border-[hsl(var(--border))]'
-                      }`}
+                      key={opt}
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => setDuration(opt)}
+                      className={[
+                        'rounded-xl border p-4 text-left transition-colors',
+                        duration === opt
+                          ? 'border-primary bg-primary/5'
+                          : 'border-gray-200 hover:border-gray-300',
+                        disabled ? 'opacity-50 cursor-not-allowed' : '',
+                      ].join(' ')}
                     >
-                      {formatDateLabel(d.availability_date)}
-                      <span className="block text-[10px] mt-0.5 opacity-70">
-                        {futureCount} {futureCount === 1 ? t('booking.slot') : t('booking.slots')}
-                      </span>
+                      <p className="text-xs text-gray-500">
+                        <Clock size={12} className="inline mr-1" />
+                        {opt === 60 ? '1 hora' : '30 minutos'}
+                      </p>
+                      <p className="mt-1 text-base font-semibold text-gray-900">
+                        {optPrice ? formatCurrency(Number(optPrice)) : '—'}
+                      </p>
                     </button>
-                    )
-                  })}
-                </div>
+                  )
+                })}
               </div>
+            </div>
 
-              {/* Time slots */}
-              {selectedDateData && (() => {
-                // Build set of available slot times for 60-min validation
-                const availableTimes = new Set(
-                  selectedDateData.slots
-                    .filter((s) => !isSlotPast(selectedDate!, s.slot_time))
-                    .map((s) => formatTime(s.slot_time))
-                )
-                // When selected slot exists, compute the next slot time for highlight
-                const selectedNext = selectedSlot && duration === 60
-                  ? nextSlotTime(formatTime(selectedSlot.slot_time))
-                  : null
-
-                return (
-                <div>
-                  <label className="text-xs font-medium text-[hsl(var(--muted-foreground))] uppercase tracking-wider mb-2 block">
-                    <Clock size={12} className="inline mr-1.5" />
-                    {t('booking.time')}
-                  </label>
-                  <div className="grid grid-cols-4 gap-2">
-                    {selectedDateData.slots.map((slot) => {
-                      const time = formatTime(slot.slot_time)
-                      const past = isSlotPast(selectedDate!, slot.slot_time)
-                      const selected = selectedSlot?.id === slot.id
-                      // For 60 min: disable if the next consecutive slot is not available
-                      const needs60 = duration === 60
-                      const nextAvailable = !needs60 || availableTimes.has(nextSlotTime(time))
-                      const disabled = past || (needs60 && !nextAvailable)
-                      // Highlight the "companion" slot when 60 min is selected
-                      const isCompanion = selectedNext === time
-
-                      return (
-                        <button
-                          key={slot.id}
-                          onClick={() => {
-                            if (disabled) {
-                              setError(past ? t('booking.slotPast') : 'Horário seguinte indisponível para 60 min')
-                              return
-                            }
-                            setError(null)
-                            setSelectedSlot(slot)
-                          }}
-                          className={`py-2.5 rounded-xl text-sm font-medium transition-colors border ${
-                            disabled
-                              ? 'bg-[hsl(var(--card))] text-[hsl(var(--muted-foreground))]/40 border-[hsl(var(--border))]/40 opacity-40 cursor-not-allowed line-through'
-                              : selected || isCompanion
-                                ? 'bg-[hsl(var(--primary))] text-white border-[hsl(var(--primary))]'
-                                : 'bg-[hsl(var(--card))] text-[hsl(var(--foreground))] border-[hsl(var(--border))]'
-                          }`}
-                        >
-                          {time}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-                )
-              })()}
-
-              {/* Error */}
-              {error && (
-                <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20">
-                  <AlertCircle size={16} className="text-red-400 shrink-0" />
-                  <p className="text-xs text-red-400">{error}</p>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-
-        {/* Footer: Checkout */}
-        {selectedSlot && (
-          <div className="px-5 py-4 border-t border-[hsl(var(--border))]">
             <button
-              onClick={handleCheckout}
-              disabled={isCheckingOut || !(user?.id || session?.user?.id)}
-              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-[hsl(var(--primary))] text-white font-semibold text-sm hover:opacity-90 active:scale-[0.98] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed"
+              type="button"
+              onClick={handleRequest}
+              disabled={!price || Number(price) <= 0}
+              className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-white disabled:opacity-50"
             >
-              {isCheckingOut ? (
-                <Loader2 size={18} className="animate-spin" />
-              ) : (
-                <Video size={18} />
-              )}
-              {isCheckingOut
-                ? t('booking.processing')
-                : price > 0
-                  ? `${t('booking.bookFor')} ${formatCurrency(price)}`
-                  : t('booking.bookFree')}
+              {t('booking.request') ?? 'Solicitar videochamada'}
             </button>
-            <p className="text-[10px] text-center text-[hsl(var(--muted-foreground))] mt-2">
-              {formatDateLabel(selectedDate!)} {t('booking.at')} {formatTime(selectedSlot.slot_time)} · {duration} min
+          </div>
+        )}
+
+        {state === 'requesting' && (
+          <div className="flex flex-col items-center gap-3 py-8">
+            <Loader2 className="animate-spin text-primary" size={32} />
+            <p className="text-sm text-gray-600">
+              {t('booking.sendingRequest') ?? 'Enviando solicitação…'}
             </p>
+          </div>
+        )}
+
+        {state === 'waiting_accept' && (
+          <div className="space-y-4 text-center py-4">
+            <Loader2 className="animate-spin text-primary mx-auto" size={32} />
+            <p className="text-sm font-medium text-gray-800">
+              {t('booking.waitingAccept') ?? 'Aguardando o creator aceitar…'}
+            </p>
+            <p className="text-xs text-gray-500">
+              {t('booking.countdown', { time: formatCountdown(countdownMs) }) ??
+                `Expira em ${formatCountdown(countdownMs)}`}
+            </p>
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="text-sm text-red-600 hover:underline"
+            >
+              {t('common.cancel') ?? 'Cancelar'}
+            </button>
+          </div>
+        )}
+
+        {state === 'awaiting_payment' && (
+          <div className="space-y-4 text-center py-2">
+            <CheckCircle2 className="text-emerald-500 mx-auto" size={40} />
+            <p className="text-base font-semibold text-gray-900">
+              {t('booking.accepted') ?? 'Creator aceitou!'}
+            </p>
+            <p className="text-sm text-gray-600">
+              {t('booking.payToJoin') ??
+                'Finalize o pagamento para liberar a sala.'}
+            </p>
+            <button
+              type="button"
+              onClick={handlePay}
+              className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-white"
+            >
+              {t('booking.payNow', { price: formatCurrency(currentPrice) }) ??
+                `Pagar ${formatCurrency(currentPrice)}`}
+            </button>
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="text-sm text-gray-500 hover:underline"
+            >
+              {t('common.cancel') ?? 'Cancelar'}
+            </button>
+          </div>
+        )}
+
+        {state === 'rejected' && (
+          <div className="flex flex-col items-center gap-3 py-6 text-center">
+            <Ban className="text-red-500" size={40} />
+            <p className="text-base font-semibold text-gray-900">
+              {t('booking.rejected') ?? 'Solicitação recusada'}
+            </p>
+            <p className="text-sm text-gray-600">
+              {t('booking.rejectedDescription') ??
+                'O creator recusou sua solicitação.'}
+            </p>
+            <button
+              onClick={onClose}
+              className="mt-2 rounded-xl bg-gray-900 px-6 py-2 text-sm text-white"
+            >
+              {t('common.close') ?? 'Fechar'}
+            </button>
+          </div>
+        )}
+
+        {state === 'expired' && (
+          <div className="flex flex-col items-center gap-3 py-6 text-center">
+            <TimerReset className="text-amber-500" size={40} />
+            <p className="text-base font-semibold text-gray-900">
+              {t('booking.expired') ?? 'Creator não respondeu a tempo'}
+            </p>
+            <button
+              onClick={onClose}
+              className="mt-2 rounded-xl bg-gray-900 px-6 py-2 text-sm text-white"
+            >
+              {t('common.close') ?? 'Fechar'}
+            </button>
+          </div>
+        )}
+
+        {state === 'paid' && (
+          <div className="flex flex-col items-center gap-3 py-6 text-center">
+            <CheckCircle2 className="text-emerald-500" size={40} />
+            <p className="text-base font-semibold text-gray-900">
+              {t('booking.paid') ?? 'Pagamento confirmado'}
+            </p>
+            <a
+              href={`/calls/${callId}`}
+              className="mt-2 rounded-xl bg-primary px-6 py-2 text-sm font-semibold text-white"
+            >
+              {t('booking.enterRoom') ?? 'Entrar na sala'}
+            </a>
+          </div>
+        )}
+
+        {state === 'cancelled' && (
+          <div className="flex flex-col items-center gap-3 py-6 text-center">
+            <Ban className="text-gray-400" size={40} />
+            <p className="text-sm text-gray-600">
+              {t('booking.cancelled') ?? 'Solicitação cancelada'}
+            </p>
+            <button
+              onClick={onClose}
+              className="mt-2 rounded-xl bg-gray-900 px-6 py-2 text-sm text-white"
+            >
+              {t('common.close') ?? 'Fechar'}
+            </button>
+          </div>
+        )}
+
+        {state === 'error' && (
+          <div className="flex flex-col items-center gap-3 py-6 text-center">
+            <AlertCircle className="text-red-500" size={40} />
+            <p className="text-sm text-gray-700">
+              {errorMessage ?? t('common.error') ?? 'Algo deu errado'}
+            </p>
+            <button
+              onClick={onClose}
+              className="mt-2 rounded-xl bg-gray-900 px-6 py-2 text-sm text-white"
+            >
+              {t('common.close') ?? 'Fechar'}
+            </button>
           </div>
         )}
       </div>

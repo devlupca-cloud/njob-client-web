@@ -891,6 +891,7 @@ export type Database = {
       }
       one_on_one_calls: {
         Row: {
+          accepted_at: string | null
           actual_end_time: string | null
           actual_start_time: string | null
           availability_slot_id: string | null
@@ -900,17 +901,22 @@ export type Database = {
           creator_id: string
           creator_share: number | null
           currency: string
+          expires_at: string | null
           id: string
+          paid_at: string | null
           platform_fee: number | null
+          rejected_at: string | null
+          request_flow: boolean
           scheduled_duration_minutes: number
           scheduled_end_time: string | null
-          scheduled_start_time: string
+          scheduled_start_time: string | null
           status: Database["public"]["Enums"]["one_on_one_call_status"]
           transaction_id: string | null
           updated_at: string | null
           user_id: string
         }
         Insert: {
+          accepted_at?: string | null
           actual_end_time?: string | null
           actual_start_time?: string | null
           availability_slot_id?: string | null
@@ -920,17 +926,22 @@ export type Database = {
           creator_id: string
           creator_share?: number | null
           currency: string
+          expires_at?: string | null
           id?: string
+          paid_at?: string | null
           platform_fee?: number | null
+          rejected_at?: string | null
+          request_flow?: boolean
           scheduled_duration_minutes: number
           scheduled_end_time?: string | null
-          scheduled_start_time: string
+          scheduled_start_time?: string | null
           status?: Database["public"]["Enums"]["one_on_one_call_status"]
           transaction_id?: string | null
           updated_at?: string | null
           user_id: string
         }
         Update: {
+          accepted_at?: string | null
           actual_end_time?: string | null
           actual_start_time?: string | null
           availability_slot_id?: string | null
@@ -940,11 +951,15 @@ export type Database = {
           creator_id?: string
           creator_share?: number | null
           currency?: string
+          expires_at?: string | null
           id?: string
+          paid_at?: string | null
           platform_fee?: number | null
+          rejected_at?: string | null
+          request_flow?: boolean
           scheduled_duration_minutes?: number
           scheduled_end_time?: string | null
-          scheduled_start_time?: string
+          scheduled_start_time?: string | null
           status?: Database["public"]["Enums"]["one_on_one_call_status"]
           transaction_id?: string | null
           updated_at?: string | null
@@ -1492,6 +1507,8 @@ export type Database = {
           full_name: string | null
           id: string
           is_active: boolean | null
+          is_available_for_calls: boolean
+          last_seen_at: string | null
           role: Database["public"]["Enums"]["user_role"]
           updated_at: string | null
           username: string | null
@@ -1505,6 +1522,8 @@ export type Database = {
           full_name?: string | null
           id?: string
           is_active?: boolean | null
+          is_available_for_calls?: boolean
+          last_seen_at?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           updated_at?: string | null
           username?: string | null
@@ -1518,12 +1537,46 @@ export type Database = {
           full_name?: string | null
           id?: string
           is_active?: boolean | null
+          is_available_for_calls?: boolean
+          last_seen_at?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           updated_at?: string | null
           username?: string | null
           whatsapp?: string | null
         }
         Relationships: []
+      }
+      creator_presence: {
+        Row: {
+          creator_id: string
+          last_heartbeat_at: string
+          online: boolean
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          creator_id: string
+          last_heartbeat_at?: string
+          online?: boolean
+          source?: string
+          updated_at?: string
+        }
+        Update: {
+          creator_id?: string
+          last_heartbeat_at?: string
+          online?: boolean
+          source?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_presence_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       subscription_plans: {
         Row: {
@@ -1783,6 +1836,11 @@ export type Database = {
         Args: { p_creator_id: string }
         Returns: number
       }
+      fn_create_call_request: {
+        Args: { p_creator_id: string; p_duration_minutes: number }
+        Returns: Database["public"]["Tables"]["one_on_one_calls"]["Row"]
+      }
+      fn_expire_pending_calls: { Args: Record<string, never>; Returns: number }
       create_pack_with_items: { Args: { p_payload: Json }; Returns: Json }
       get_available_coupons: { Args: never; Returns: Json }
       get_client_info: { Args: { p_profile_id: string }; Returns: Json }
@@ -1866,6 +1924,9 @@ export type Database = {
         | "cancelled_by_user"
         | "cancelled_by_creator"
         | "rejected"
+        | "awaiting_payment"
+        | "paid"
+        | "expired"
       pack_item_type: "photo" | "video"
       payout_status: "pending" | "processing" | "completed" | "failed"
       period_of_day: "Manhã" | "Tarde" | "Noite" | "Madrugada"
@@ -2018,6 +2079,9 @@ export const Constants = {
         "cancelled_by_user",
         "cancelled_by_creator",
         "rejected",
+        "awaiting_payment",
+        "paid",
+        "expired",
       ],
       pack_item_type: ["photo", "video"],
       payout_status: ["pending", "processing", "completed", "failed"],

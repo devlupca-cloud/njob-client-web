@@ -191,15 +191,45 @@ export interface LiveStream {
 
 // ─── Calls ───────────────────────────────────────────────────────────────────
 
+export type OneOnOneCallStatus =
+  | 'requested'
+  | 'awaiting_payment'
+  | 'paid'
+  | 'confirmed'
+  | 'completed'
+  | 'cancelled_by_user'
+  | 'cancelled_by_creator'
+  | 'rejected'
+  | 'expired'
+  // Legacy aliases still referenced in older UI paths:
+  | 'pending'
+  | 'cancelled'
+
 export interface OneOnOneCall {
   id: string
   creator_id: string
   user_id: string
   availability_slot_id: string | null
-  scheduled_start_time: string
+  scheduled_start_time: string | null
   scheduled_duration_minutes: number
   call_price: number
-  status: 'pending' | 'confirmed' | 'completed' | 'cancelled'
+  currency?: string
+  status: OneOnOneCallStatus
+  expires_at: string | null
+  accepted_at: string | null
+  rejected_at: string | null
+  paid_at: string | null
+  request_flow: boolean
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+export interface CreatorPresence {
+  creator_id: string
+  online: boolean
+  last_heartbeat_at: string
+  source: 'manual' | 'presence' | 'idle' | 'logout' | string
+  updated_at: string
 }
 
 // ─── Subscriptions ───────────────────────────────────────────────────────────

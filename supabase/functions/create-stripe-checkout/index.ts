@@ -70,10 +70,11 @@ serve(async (req) => {
       );
     }
 
-    // stripe_price_id é obrigatório exceto para video-call e pack (criado on-the-fly)
-    if (product_type !== "video-call" && product_type !== "pack" && !stripe_price_id) {
+    // stripe_price_id é obrigatório exceto para video-call / video-call-request / pack (criados on-the-fly)
+    const ON_THE_FLY_TYPES = new Set(["video-call", "video-call-request", "pack"]);
+    if (!ON_THE_FLY_TYPES.has(product_type) && !stripe_price_id) {
       throw new Error(
-        "stripe_price_id é obrigatório para product_type diferente de 'video-call' e 'pack'.",
+        "stripe_price_id é obrigatório para este product_type.",
       );
     }
 
@@ -264,6 +265,46 @@ serve(async (req) => {
       }
     }
 
+    // 2.4) VIDEO-CALL-REQUEST: fluxo novo (creator já aceitou, liberando pagamento)
+    //      product_id === call_id. Validação: a call existe, pertence ao
+    //      comprador e está em 'awaiting_payment'. Zero bloqueio de conflito.
+    let videoCallRequestRow: {
+      id: string;
+      creator_id: string;
+      user_id: string;
+      scheduled_duration_minutes: number;
+      call_price: number;
+      status: string;
+    } | null = null;
+
+    if (product_type === "video-call-request") {
+      const { data: callRow, error: callErr } = await supabaseAdmin
+        .from("one_on_one_calls")
+        .select("id, creator_id, user_id, scheduled_duration_minutes, call_price, status")
+        .eq("id", product_id)
+        .maybeSingle();
+
+      if (callErr || !callRow) {
+        throw new Error("Solicitação de videochamada não encontrada.");
+      }
+
+      if (callRow.user_id !== customerId) {
+        throw new Error("Esta solicitação pertence a outro usuário.");
+      }
+
+      if (callRow.creator_id !== creator_id) {
+        throw new Error("creator_id não bate com a solicitação.");
+      }
+
+      if (callRow.status !== "awaiting_payment") {
+        throw new Error(
+          `Solicitação não está pronta para pagamento (status=${callRow.status}).`,
+        );
+      }
+
+      videoCallRequestRow = callRow as typeof videoCallRequestRow;
+    }
+
     // 3) STRIPE ACCOUNT DO CRIADOR (conectada)
     const { data: payoutInfo, error: payoutError } = await supabaseAdmin
       .from("creator_payout_info")
@@ -354,6 +395,34 @@ serve(async (req) => {
           quantity: 1,
         },
       ];
+    } else if (product_type === "video-call-request") {
+      // Fluxo novo: preço já gravado em one_on_one_calls.call_price no momento
+      // do fn_create_call_request. Nada de consultar profile_settings de novo.
+      if (!videoCallRequestRow) {
+        throw new Error("Solicitação de videochamada ausente.");
+      }
+
+      const basePrice = Number(videoCallRequestRow.call_price);
+      if (!basePrice || basePrice <= 0) {
+        throw new Error("Valor da videochamada inválido.");
+      }
+      priceInCents = Math.round(basePrice * 100);
+
+      const durationLabel =
+        videoCallRequestRow.scheduled_duration_minutes === 60
+          ? "Vídeo-chamada 1h"
+          : "Vídeo-chamada 30min";
+
+      lineItems = [
+        {
+          price_data: {
+            currency: "brl",
+            unit_amount: priceInCents,
+            product_data: { name: durationLabel },
+          },
+          quantity: 1,
+        },
+      ];
     } else if (product_type === "pack" && !stripe_price_id) {
       // Pack sem stripe_price_id — criar produto/preço no Stripe on-the-fly
       const { data: packRow, error: packErr } = await supabaseAdmin
@@ -433,14 +502,13 @@ serve(async (req) => {
     } else {
       // Fallback: URLs originais do FlutterFlow
       switch (product_type) {
+        case "video-call-request":
+          success_url = `https://www.njob.com.br/calls/${product_id}`;
+          break;
         case "live":
         case "live_ticket":
-          success_url = "https://www.njob.com.br/purchases";
-          break;
         case "video-call":
         case "pack":
-          success_url = "https://www.njob.com.br/purchases";
-          break;
         default:
           success_url = "https://www.njob.com.br/purchases";
           break;
@@ -483,6 +551,12 @@ serve(async (req) => {
           creator_id,
           ...(product_type === "video-call"
             ? { duration: duration ?? 30 }
+            : {}),
+          ...(product_type === "video-call-request" && videoCallRequestRow
+            ? {
+                call_id: videoCallRequestRow.id,
+                duration: String(videoCallRequestRow.scheduled_duration_minutes),
+              }
             : {}),
         },
         payment_intent_data: {

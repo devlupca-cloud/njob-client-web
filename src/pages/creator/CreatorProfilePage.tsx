@@ -27,6 +27,7 @@ import { useGuestGuard } from '@/components/ui/GuestModal'
 import { useToast } from '@/components/ui/Toast'
 import CardPack from '@/components/cards/CardPack'
 import BookingCallModal from '@/components/modals/BookingCallModal'
+import { useCreatorOnline } from '@/hooks/useCreatorOnline'
 import { formatCurrency, formatDateTime } from '@/lib/utils'
 import type { Creator, PackInfo, LiveStream } from '@/types'
 
@@ -581,6 +582,7 @@ export default function CreatorProfilePage() {
   const [isBuyingPack, setIsBuyingPack] = useState(false)
   const [showMeetingModal, setShowMeetingModal] = useState(false)
   const [showBookingModal, setShowBookingModal] = useState(false)
+  const { online: creatorOnlineForCalls } = useCreatorOnline(profileId ?? null)
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['creator-profile', profileId],
@@ -883,11 +885,11 @@ export default function CreatorProfilePage() {
       </div>
 
       {/* ── Action Buttons (Capabilities) ─────────────────────────────────── */}
-      {(creator.faz_chamada_video || creator.faz_encontro_presencial || scheduledLives.length > 0 || activeLive) && (
+      {((creator.faz_chamada_video && creatorOnlineForCalls) || creator.faz_encontro_presencial || scheduledLives.length > 0 || activeLive) && (
         <div className="px-4 mb-5 max-w-4xl mx-auto w-full">
           <div className="flex flex-col gap-2.5">
-            {/* Chamada Individual — primary CTA (abre modal de booking) */}
-            {creator.faz_chamada_video && (
+            {/* Chamada Individual — só aparece quando creator está online */}
+            {creator.faz_chamada_video && creatorOnlineForCalls && (
               <button
                 onClick={() => { if (!guardGuestAction()) setShowBookingModal(true) }}
                 className="flex items-center justify-center gap-3 w-full px-5 py-3.5 rounded-xl border-none"
@@ -1099,6 +1101,8 @@ export default function CreatorProfilePage() {
         creatorId={creator.id}
         creatorName={creator.nome}
         avatarUrl={creator.foto_perfil}
+        pricePer30Min={creator.valor_30_min ?? null}
+        pricePer1Hr={creator.valor_1_hora ?? null}
       />
 
       {/* Close menu overlay */}

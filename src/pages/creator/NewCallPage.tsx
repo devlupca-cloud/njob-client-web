@@ -1,3 +1,5 @@
+// @deprecated Agenda fixa substituída pelo fluxo "Online + Solicitação" (20/04/2026).
+// Esta página ainda existe para não quebrar links; BookingCallModal agora cuida do fluxo.
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'

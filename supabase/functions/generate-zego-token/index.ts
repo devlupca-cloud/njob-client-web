@@ -1,11 +1,21 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { jwtVerify } from "https://deno.land/x/jose@v4.14.4/index.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.1?target=deno";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
 };
+
+const supabaseAdmin = createClient(
+  Deno.env.get("SUPABASE_URL")!,
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+);
+
+// Janela pós-pagamento para o novo fluxo (sem horário agendado).
+const POST_PAID_WINDOW_MS = 2 * 60 * 60 * 1000; // 2 horas
+const LEGACY_GRACE_MS = 5 * 60 * 1000;           // 5 minutos depois do fim
 
 /**
  * Generates a ZegoCloud Token04 using AES-CBC encryption.
@@ -132,6 +142,62 @@ serve(async (req) => {
     // 3. Verify the authenticated user matches the requested userID
     if (authenticatedUserId !== userID) {
       throw new Error("Não autorizado: userID não corresponde ao token");
+    }
+
+    // 3.1. Autorização contra a call: roomID === call.id
+    const { data: callRow, error: callErr } = await supabaseAdmin
+      .from("one_on_one_calls")
+      .select(
+        "id, creator_id, user_id, status, paid_at, scheduled_start_time, scheduled_duration_minutes",
+      )
+      .eq("id", roomID)
+      .maybeSingle();
+
+    if (callErr || !callRow) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Videochamada não encontrada" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    if (userID !== callRow.user_id && userID !== callRow.creator_id) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Você não participa desta videochamada" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    if (callRow.status !== "paid" && callRow.status !== "confirmed") {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: `Videochamada não liberada (status=${callRow.status})`,
+        }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // Janela de acesso:
+    // - 'paid' (novo fluxo): paid_at + 2h.
+    // - 'confirmed' (legado): scheduled_start_time + duration + 5min.
+    const now = Date.now();
+    if (callRow.status === "paid") {
+      const paidAt = callRow.paid_at ? new Date(callRow.paid_at).getTime() : NaN;
+      if (!isFinite(paidAt) || now > paidAt + POST_PAID_WINDOW_MS) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Janela de entrada expirada" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    } else if (callRow.status === "confirmed" && callRow.scheduled_start_time) {
+      const start = new Date(callRow.scheduled_start_time).getTime();
+      const end = start + (callRow.scheduled_duration_minutes ?? 30) * 60 * 1000;
+      if (now > end + LEGACY_GRACE_MS) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Videochamada já encerrada" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
     }
 
     // 4. Get ZegoCloud credentials from server env (NEVER exposed to client)

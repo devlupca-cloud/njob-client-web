@@ -536,6 +536,69 @@ async function handlePaymentCheckoutCompleted(session: any, connectedAccountId?:
     if (callRow) {
       await supabaseAdmin.from("transactions").update({ related_call_id: callRow.id }).eq("id", transactionId);
     }
+  } else if (product_type === "video-call-request") {
+    // Fluxo novo: creator já aceitou, a call existe com status='awaiting_payment'.
+    // O UPDATE status='paid' precisa passar pelo trigger fn_validate_call_transition,
+    // mas service_role bypassa RLS sem acionar o guard — o trigger permite a
+    // transição awaiting_payment→paid via SECURITY DEFINER RPC dedicado.
+    const callId = (session.metadata ?? {}).call_id || product_id;
+
+    if (!callId) {
+      throw new Error("call_id ausente em video-call-request metadata");
+    }
+
+    // Verificar ownership: a call tem que pertencer a este creator.
+    const { data: callCheck, error: callCheckErr } = await supabaseAdmin
+      .from("one_on_one_calls")
+      .select("id, creator_id, user_id, status")
+      .eq("id", callId)
+      .maybeSingle();
+
+    if (callCheckErr || !callCheck) {
+      throw new Error(`Call ${callId} não encontrada para video-call-request`);
+    }
+
+    if (metaCreatorId && callCheck.creator_id !== metaCreatorId) {
+      throw new Error(
+        `creator_id ${metaCreatorId} não bate com a call ${callId}`,
+      );
+    }
+
+    if (callCheck.user_id !== customerId) {
+      throw new Error(
+        `customerId ${customerId} não bate com a call ${callId}`,
+      );
+    }
+
+    // Idempotência: se já está pago, só relinka a transação e segue.
+    if (callCheck.status === "paid" || callCheck.status === "confirmed") {
+      console.warn(
+        `[webhook] Call ${callId} já está em status=${callCheck.status} — apenas vinculando transação`,
+      );
+      await supabaseAdmin
+        .from("transactions")
+        .update({ related_call_id: callId })
+        .eq("id", transactionId);
+    } else {
+      // Transição awaiting_payment → paid via RPC que bypassa o trigger.
+      const { error: markErr } = await supabaseAdmin.rpc("fn_mark_call_paid", {
+        p_call_id: callId,
+        p_transaction_id: transactionId,
+        p_platform_fee: platformFee,
+        p_creator_share: creatorShare,
+      });
+
+      if (markErr) {
+        throw new Error(
+          `Erro ao marcar call ${callId} como paga: ${markErr.message}`,
+        );
+      }
+
+      await supabaseAdmin
+        .from("transactions")
+        .update({ related_call_id: callId })
+        .eq("id", transactionId);
+    }
   }
 
   // ─── Notificar o creator sobre a venda ─────────────────────────────────────
@@ -598,6 +661,10 @@ async function notifyCreatorOfSale(
       case "video-call":
         title = "Nova videochamada agendada!";
         message = `${buyerName} agendou uma videochamada por ${formattedAmount}.`;
+        break;
+      case "video-call-request":
+        title = "Videochamada paga — entrar na sala!";
+        message = `${buyerName} pagou a videochamada (${formattedAmount}). Você já pode entrar na sala.`;
         break;
       default:
         title = "Nova venda!";
