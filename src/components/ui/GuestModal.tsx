@@ -10,6 +10,7 @@ import { AuthInput } from '@/components/ui/AuthInput'
 import { useToast } from '@/components/ui/Toast'
 import Logo from '@/components/ui/Logo'
 import { useTranslation } from 'react-i18next'
+import { LEGAL_VERSION } from '@/lib/legal/documents'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -184,6 +185,7 @@ function RegisterForm({
   const [serverError, setServerError] = useState<string | null>(null)
   // Controla exibição do modal de e-mail já cadastrado
   const [showEmailExistsModal, setShowEmailExistsModal] = useState(false)
+  const [legalAccepted, setLegalAccepted] = useState(false)
 
   const schema = z
     .object({
@@ -230,8 +232,17 @@ function RegisterForm({
 
   const onSubmit = async (data: FormData) => {
     setServerError(null)
+    if (!legalAccepted) {
+      setServerError(
+        'Você precisa aceitar os Termos de Uso e a Política de Privacidade.',
+      )
+      return
+    }
     try {
-      await signUp(data.email, data.password, data.fullName, data.dateBirth)
+      await signUp(data.email, data.password, data.fullName, data.dateBirth, {
+        version: LEGAL_VERSION,
+        acceptedAt: new Date().toISOString(),
+      })
       onSuccess()
     } catch (err: unknown) {
       const message =
@@ -331,9 +342,40 @@ function RegisterForm({
           </div>
         )}
 
+        {/* Legal acceptance */}
+        <label className="flex items-start gap-2 text-xs text-[hsl(var(--muted-foreground))] cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={legalAccepted}
+            onChange={(e) => setLegalAccepted(e.target.checked)}
+            className="mt-0.5 w-4 h-4 accent-[hsl(var(--primary))]"
+          />
+          <span>
+            Li e concordo com os{' '}
+            <a
+              href="/terms"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[hsl(var(--primary))] underline underline-offset-2"
+            >
+              Termos de Uso
+            </a>{' '}
+            e a{' '}
+            <a
+              href="/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[hsl(var(--primary))] underline underline-offset-2"
+            >
+              Política de Privacidade
+            </a>
+            .
+          </span>
+        </label>
+
         <button
           type="submit"
-          disabled={isSubmitting}
+          disabled={isSubmitting || !legalAccepted}
           className="w-full h-11 rounded-xl font-semibold text-sm transition-all duration-200
             bg-[hsl(var(--primary))] text-white hover:opacity-90 active:scale-[0.98]
             disabled:opacity-50 disabled:cursor-not-allowed
