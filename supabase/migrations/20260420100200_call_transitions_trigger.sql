@@ -25,8 +25,17 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  -- Bypass para replicação / service_role (webhooks).
+  -- Bypass para replicação (pg_cron / sessões postgres diretas).
   IF current_setting('session_replication_role', true) = 'replica' THEN
+    RETURN NEW;
+  END IF;
+
+  -- Bypass por GUC custom: setado APENAS dentro de RPCs SECURITY DEFINER
+  -- (fn_mark_call_paid no webhook, fn_demo_mark_call_paid). session_replication_role
+  -- não pode ser setado por session_user='authenticator' (PostgREST/webhook), então
+  -- usamos este GUC. Clientes via PostgREST não conseguem injetar app.* num UPDATE
+  -- normal, então isto NÃO afrouxa as regras de transição para usuário/creator.
+  IF current_setting('app.bypass_call_transition', true) = '1' THEN
     RETURN NEW;
   END IF;
 

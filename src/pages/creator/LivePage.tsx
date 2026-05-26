@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { ArrowLeft, Radio, ShieldAlert } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
+import { useToast } from '@/components/ui/Toast'
 import { generateToken, ZegoUIKitPrebuilt } from '@/lib/zegocloud'
+import { observeZegoTranslation } from '@/lib/zegoI18n'
 import type { LiveStream } from '@/types'
 
 async function fetchLive(id: string): Promise<LiveStream> {
@@ -32,9 +35,19 @@ export default function LivePage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { profile, user } = useAuthStore()
+  const { toast } = useToast()
+  const { i18n } = useTranslation()
   const [status, setStatus] = useState<'loading' | 'no-ticket' | 'joined' | 'error'>('loading')
   const containerRef = useRef<HTMLDivElement>(null)
   const zegoRef = useRef<InstanceType<typeof ZegoUIKitPrebuilt> | null>(null)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const endedRef = useRef(false)
+
+  // Traduz a UI do ZegoCloud UIKit (SDK só vem em en/zh).
+  useEffect(() => {
+    if (!containerRef.current) return
+    return observeZegoTranslation(containerRef.current, i18n.language)
+  }, [i18n.language])
 
   const { data: live, isError } = useQuery({
     queryKey: ['live-stream', id],
@@ -46,6 +59,27 @@ export default function LivePage() {
     if (!live || !user?.id || !containerRef.current) return
 
     let cancelled = false
+    endedRef.current = false
+
+    // Sai da live quando a duração acaba (espectador). Idempotente.
+    const endView = () => {
+      if (endedRef.current) return
+      endedRef.current = true
+      if (timerRef.current) {
+        clearInterval(timerRef.current)
+        timerRef.current = null
+      }
+      if (zegoRef.current) {
+        try {
+          zegoRef.current.destroy()
+        } catch {
+          /* noop */
+        }
+        zegoRef.current = null
+      }
+      toast({ title: 'A live foi encerrada.', type: 'info' })
+      navigate(-1)
+    }
 
     async function joinLive() {
       const isFree = !live!.ticket_price
@@ -85,6 +119,27 @@ export default function LivePage() {
       })
 
       setStatus('joined')
+
+      // Timer de encerramento: actual_start_time (host iniciou) + duração
+      // estimada (30/60 min). Se o host ainda não iniciou, não arma o timer.
+      const liveRow = live! as unknown as {
+        actual_start_time: string | null
+        estimated_duration_minutes: number | null
+      }
+      if (liveRow.actual_start_time && liveRow.estimated_duration_minutes) {
+        const endAt =
+          new Date(liveRow.actual_start_time).getTime() +
+          liveRow.estimated_duration_minutes * 60_000
+        let warned = false
+        timerRef.current = setInterval(() => {
+          const remaining = endAt - Date.now()
+          if (remaining <= 60_000 && remaining > 0 && !warned) {
+            warned = true
+            toast({ title: 'A live encerra em 1 minuto.', type: 'warning' })
+          }
+          if (remaining <= 0) endView()
+        }, 1000)
+      }
     }
 
     joinLive().catch(() => {
@@ -93,6 +148,10 @@ export default function LivePage() {
 
     return () => {
       cancelled = true
+      if (timerRef.current) {
+        clearInterval(timerRef.current)
+        timerRef.current = null
+      }
       if (zegoRef.current) {
         zegoRef.current.destroy()
         zegoRef.current = null

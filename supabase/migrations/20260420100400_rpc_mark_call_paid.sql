@@ -1,8 +1,12 @@
 -- ============================================================================
 -- RPC fn_mark_call_paid — chamada pelo webhook Stripe após pagamento confirmado
 -- ============================================================================
--- Usa session_replication_role='replica' para bypassar fn_validate_call_transition
--- (service_role pode chamar; RLS já foi garantida upstream).
+-- Bypassa fn_validate_call_transition via GUC custom app.bypass_call_transition.
+-- NÃO usa session_replication_role: aquele parâmetro exige session_user
+-- privilegiado e falha quando a função é chamada via PostgREST/webhook
+-- (session_user='authenticator') com "permission denied to set parameter".
+-- O GUC custom funciona em qualquer contexto e clientes não conseguem injetá-lo
+-- num UPDATE normal. (service_role pode chamar; RLS já foi garantida upstream.)
 
 CREATE OR REPLACE FUNCTION public.fn_mark_call_paid(
   p_call_id uuid,
@@ -17,7 +21,7 @@ AS $$
 DECLARE
   v_row public.one_on_one_calls%ROWTYPE;
 BEGIN
-  SET LOCAL session_replication_role = 'replica';
+  SET LOCAL app.bypass_call_transition = '1';
 
   UPDATE public.one_on_one_calls
      SET status = 'paid',

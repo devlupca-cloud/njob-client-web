@@ -1,4 +1,4 @@
-import { useState, useMemo, useDeferredValue } from 'react'
+import { useState, useMemo, useDeferredValue, useEffect } from 'react'
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { Search, Users, RefreshCw } from 'lucide-react'
 import Logo from '@/components/ui/Logo'
@@ -109,12 +109,34 @@ async function fetchCreators(
     }
   }
 
+  // Presença real (creator_presence.online) — o que o creator liga/desliga.
+  // O RPC retorna status='online' só com base em is_active, então sobrescrevemos
+  // pelo estado de presença para o badge/seção "Online" refletirem a realidade.
+  let presenceMap = new Map<string, boolean>()
+  if (ids.length > 0) {
+    const { data: presence } = await supabase
+      .from('creator_presence')
+      .select('creator_id, online')
+      .in('creator_id', ids)
+    if (presence) {
+      presenceMap = new Map(
+        (presence as Array<{ creator_id: string; online: boolean | null }>).map((p) => [
+          p.creator_id,
+          p.online === true,
+        ]),
+      )
+    }
+  }
+
   return rows.map((row: CreatorFromRPC): Creator => {
     const s = settingsMap.get(row.id)
+    // 'em live' tem prioridade; caso contrário a presença decide online/offline.
+    const status =
+      row.status === 'em live' ? 'em live' : presenceMap.get(row.id) ? 'online' : 'offline'
     return {
       id: row.id,
       nome: row.nome,
-      status: row.status,
+      status,
       foto_perfil: row.foto_perfil,
       data_criacao: row.data_criacao,
       live_hoje: false,
@@ -244,17 +266,56 @@ export default function HomePage() {
     staleTime: 0,
   })
 
+  // Overlay de presença em tempo real: creator_presence.online muda quando o
+  // creator liga/desliga "Online". Mantemos um mapa id→online atualizado via
+  // Realtime e sobrescrevemos o status vindo do fetch sem precisar refetchar.
+  const [presenceOverlay, setPresenceOverlay] = useState<Record<string, boolean>>({})
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('home-creator-presence')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'creator_presence' },
+        (payload) => {
+          const row = (payload.new ?? payload.old ?? null) as
+            | { creator_id?: string; online?: boolean }
+            | null
+          if (!row?.creator_id) return
+          setPresenceOverlay((prev) => ({ ...prev, [row.creator_id as string]: Boolean(row.online) }))
+        },
+      )
+      .subscribe()
+
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [])
+
+  // Aplica o overlay de presença sobre a lista buscada. 'em live' tem prioridade.
+  const displayCreators = useMemo(() => {
+    if (!creators) return creators
+    return creators.map((c) => {
+      if (c.status === 'em live') return c
+      const overridden = presenceOverlay[c.id]
+      if (overridden === undefined) return c
+      const nextStatus = overridden ? 'online' : 'offline'
+      return c.status === nextStatus ? c : { ...c, status: nextStatus }
+    })
+  }, [creators, presenceOverlay])
+
   // Seções da home (só usadas quando filtro = "todos" e sem busca)
   const sections = useMemo(() => {
-    if (!creators || hasActiveFilterOrSearch) return { popular: [], novos: [], online: [], emLive: [] }
+    if (!displayCreators || hasActiveFilterOrSearch)
+      return { popular: [], novos: [], online: [], emLive: [] }
 
     return {
-      popular: [...creators].sort((a, b) => b.quantidade_likes - a.quantidade_likes).slice(0, 12),
-      novos: [...creators].sort((a, b) => b.data_criacao.localeCompare(a.data_criacao)).slice(0, 12),
-      online: creators.filter((c) => c.status === 'online'),
-      emLive: creators.filter((c) => c.status === 'em live'),
+      popular: [...displayCreators].sort((a, b) => b.quantidade_likes - a.quantidade_likes).slice(0, 12),
+      novos: [...displayCreators].sort((a, b) => b.data_criacao.localeCompare(a.data_criacao)).slice(0, 12),
+      online: displayCreators.filter((c) => c.status === 'online'),
+      emLive: displayCreators.filter((c) => c.status === 'em live'),
     }
-  }, [creators, hasActiveFilterOrSearch])
+  }, [displayCreators, hasActiveFilterOrSearch])
 
   return (
     <div className="flex flex-col min-h-full bg-[hsl(var(--background))]">
@@ -336,15 +397,22 @@ export default function HomePage() {
         {!isLoading && !isError && (
           <>
             {hasActiveFilterOrSearch ? (
-              !creators || creators.length === 0 ? (
-                <EmptyState query={search} />
-              ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 p-4">
-                  {creators.map((creator) => (
-                    <CardCreator key={creator.id} creator={creator} />
-                  ))}
-                </div>
-              )
+              (() => {
+                // No filtro "Online", mostra só quem está de fato online (presença real).
+                const list =
+                  activeFilter === 'online'
+                    ? (displayCreators ?? []).filter((c) => c.status === 'online')
+                    : displayCreators ?? []
+                return list.length === 0 ? (
+                  <EmptyState query={search} />
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 p-4">
+                    {list.map((creator) => (
+                      <CardCreator key={creator.id} creator={creator} />
+                    ))}
+                  </div>
+                )
+              })()
             ) : (
               <div className="flex flex-col gap-6 py-4">
                 {sections.emLive.length > 0 && (

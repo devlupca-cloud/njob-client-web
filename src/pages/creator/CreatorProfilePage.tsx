@@ -841,8 +841,8 @@ export default function CreatorProfilePage() {
               </div>
             )}
           </div>
-          {/* Online dot */}
-          {creator.status === 'online' && (
+          {/* Online dot — presença real (creator_presence.online), em tempo real */}
+          {creatorOnlineForCalls && creator.status !== 'em live' && (
             <span className="absolute bottom-1 right-1 w-4 h-4 rounded-full bg-emerald-500 border-2 border-[hsl(var(--background))]" />
           )}
         </div>

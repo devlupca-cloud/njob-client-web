@@ -144,8 +144,9 @@ serve(async (req) => {
       throw new Error("Não autorizado: userID não corresponde ao token");
     }
 
-    // 3.1. Autorização contra a call: roomID === call.id
-    const { data: callRow, error: callErr } = await supabaseAdmin
+    // 3.1. Autorização: roomID pode ser uma videochamada (one_on_one_calls) OU
+    // uma live (live_streams). Tentamos a call primeiro; se não existir, a live.
+    const { data: callRow } = await supabaseAdmin
       .from("one_on_one_calls")
       .select(
         "id, creator_id, user_id, status, paid_at, scheduled_start_time, scheduled_duration_minutes",
@@ -153,50 +154,82 @@ serve(async (req) => {
       .eq("id", roomID)
       .maybeSingle();
 
-    if (callErr || !callRow) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Videochamada não encontrada" }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
-    if (userID !== callRow.user_id && userID !== callRow.creator_id) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Você não participa desta videochamada" }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
-    if (callRow.status !== "paid" && callRow.status !== "confirmed") {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: `Videochamada não liberada (status=${callRow.status})`,
-        }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
-    // Janela de acesso:
-    // - 'paid' (novo fluxo): paid_at + 2h.
-    // - 'confirmed' (legado): scheduled_start_time + duration + 5min.
     const now = Date.now();
-    if (callRow.status === "paid") {
-      const paidAt = callRow.paid_at ? new Date(callRow.paid_at).getTime() : NaN;
-      if (!isFinite(paidAt) || now > paidAt + POST_PAID_WINDOW_MS) {
+
+    if (callRow) {
+      // ── Videochamada ──────────────────────────────────────────────────
+      if (userID !== callRow.user_id && userID !== callRow.creator_id) {
         return new Response(
-          JSON.stringify({ success: false, error: "Janela de entrada expirada" }),
+          JSON.stringify({ success: false, error: "Você não participa desta videochamada" }),
           { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
-    } else if (callRow.status === "confirmed" && callRow.scheduled_start_time) {
-      const start = new Date(callRow.scheduled_start_time).getTime();
-      const end = start + (callRow.scheduled_duration_minutes ?? 30) * 60 * 1000;
-      if (now > end + LEGACY_GRACE_MS) {
+      if (callRow.status !== "paid" && callRow.status !== "confirmed") {
         return new Response(
-          JSON.stringify({ success: false, error: "Videochamada já encerrada" }),
+          JSON.stringify({
+            success: false,
+            error: `Videochamada não liberada (status=${callRow.status})`,
+          }),
           { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
+      }
+      if (callRow.status === "paid") {
+        const paidAt = callRow.paid_at ? new Date(callRow.paid_at).getTime() : NaN;
+        if (!isFinite(paidAt) || now > paidAt + POST_PAID_WINDOW_MS) {
+          return new Response(
+            JSON.stringify({ success: false, error: "Janela de entrada expirada" }),
+            { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+      } else if (callRow.status === "confirmed" && callRow.scheduled_start_time) {
+        const start = new Date(callRow.scheduled_start_time).getTime();
+        const end = start + (callRow.scheduled_duration_minutes ?? 30) * 60 * 1000;
+        if (now > end + LEGACY_GRACE_MS) {
+          return new Response(
+            JSON.stringify({ success: false, error: "Videochamada já encerrada" }),
+            { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+      }
+    } else {
+      // ── Live ──────────────────────────────────────────────────────────
+      const { data: liveRow } = await supabaseAdmin
+        .from("live_streams")
+        .select("id, creator_id, ticket_price, status")
+        .eq("id", roomID)
+        .maybeSingle();
+
+      if (!liveRow) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Sala não encontrada" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      // Host (creator) entra sempre. Espectador precisa de ingresso (ou live grátis).
+      if (userID !== liveRow.creator_id) {
+        if (liveRow.status === "finished" || liveRow.status === "cancelled") {
+          return new Response(
+            JSON.stringify({ success: false, error: "Live encerrada" }),
+            { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+        const isFree = !liveRow.ticket_price || Number(liveRow.ticket_price) === 0;
+        if (!isFree) {
+          const { data: ticket } = await supabaseAdmin
+            .from("live_stream_tickets")
+            .select("id")
+            .eq("live_stream_id", roomID)
+            .eq("user_id", userID)
+            .eq("status", "completed")
+            .maybeSingle();
+          if (!ticket) {
+            return new Response(
+              JSON.stringify({ success: false, error: "Ingresso necessário" }),
+              { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+            );
+          }
+        }
       }
     }
 

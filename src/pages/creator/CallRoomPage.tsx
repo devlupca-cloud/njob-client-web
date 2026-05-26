@@ -5,7 +5,9 @@ import { useTranslation } from 'react-i18next'
 import { ArrowLeft, Video, Loader2, ShieldAlert } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
+import { useToast } from '@/components/ui/Toast'
 import { generateToken, ZegoUIKitPrebuilt } from '@/lib/zegocloud'
+import { observeZegoTranslation } from '@/lib/zegoI18n'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -82,10 +84,13 @@ export default function CallRoomPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { user, profile } = useAuthStore()
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const { toast } = useToast()
   const [joined, setJoined] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const zegoRef = useRef<InstanceType<typeof ZegoUIKitPrebuilt> | null>(null)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const endedRef = useRef(false)
 
   const { data: call, isLoading, isError, error } = useQuery({
     queryKey: ['call-room', id],
@@ -95,10 +100,41 @@ export default function CallRoomPage() {
 
   const callWindow = call ? getCallWindow(call) : null
 
+  // Traduz a UI do ZegoCloud UIKit (SDK só vem em en/zh).
+  useEffect(() => {
+    if (!containerRef.current) return
+    return observeZegoTranslation(containerRef.current, i18n.language)
+  }, [i18n.language])
+
   useEffect(() => {
     if (!call || !user?.id || !containerRef.current || callWindow !== 'open') return
 
     let cancelled = false
+    endedRef.current = false
+
+    // Encerra a sala quando a duração comprada acaba. Idempotente.
+    const endCall = () => {
+      if (endedRef.current) return
+      endedRef.current = true
+      if (timerRef.current) {
+        clearInterval(timerRef.current)
+        timerRef.current = null
+      }
+      void supabase
+        .from('one_on_one_calls')
+        .update({ status: 'completed', actual_end_time: new Date().toISOString() })
+        .eq('id', call!.id)
+      if (zegoRef.current) {
+        try {
+          zegoRef.current.destroy()
+        } catch {
+          /* noop */
+        }
+        zegoRef.current = null
+      }
+      toast({ title: 'Tempo da videochamada encerrado.', type: 'info' })
+      navigate('/purchases')
+    }
 
     async function joinRoom() {
       if (cancelled) return
@@ -132,11 +168,23 @@ export default function CallRoomPage() {
         },
       })
 
-      void supabase
-        .from('one_on_one_calls')
-        .update({ actual_start_time: new Date().toISOString() })
-        .eq('id', call!.id)
-        .is('actual_start_time', null)
+      // Marca/lê o início real via RPC (idempotente, bypassa RLS, retorna o
+      // timestamp canônico de quem entrou primeiro). Fallback p/ agora se falhar.
+      const { data: startedIso } = await supabase.rpc('fn_mark_call_started', {
+        p_call_id: call!.id,
+      })
+      const startMs = startedIso ? new Date(startedIso as string).getTime() : Date.now()
+      const endAt = startMs + call!.scheduled_duration_minutes * 60_000
+
+      let warned = false
+      timerRef.current = setInterval(() => {
+        const remaining = endAt - Date.now()
+        if (remaining <= 60_000 && remaining > 0 && !warned) {
+          warned = true
+          toast({ title: 'A videochamada encerra em 1 minuto.', type: 'warning' })
+        }
+        if (remaining <= 0) endCall()
+      }, 1000)
 
       setJoined(true)
     }
@@ -147,6 +195,10 @@ export default function CallRoomPage() {
 
     return () => {
       cancelled = true
+      if (timerRef.current) {
+        clearInterval(timerRef.current)
+        timerRef.current = null
+      }
       if (zegoRef.current) {
         zegoRef.current.destroy()
         zegoRef.current = null
