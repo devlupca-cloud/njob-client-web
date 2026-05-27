@@ -8,6 +8,7 @@ import { useAuthStore } from '@/store/authStore'
 import { useToast } from '@/components/ui/Toast'
 import { generateToken, ZegoUIKitPrebuilt } from '@/lib/zegocloud'
 import { observeZegoTranslation } from '@/lib/zegoI18n'
+import { POST_PAID_CALL_WINDOW_MS, LEGACY_CALL_GRACE_MS } from '@/lib/timeWindows'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -54,9 +55,6 @@ async function fetchCall(callId: string, userId: string): Promise<CallInfo> {
 
 type CallWindow = 'open' | 'ended' | 'not_ready'
 
-const POST_PAID_WINDOW_MS = 2 * 60 * 60 * 1000
-const LEGACY_GRACE_MS = 5 * 60 * 1000
-
 function getCallWindow(call: CallInfo): CallWindow {
   if (call.status === 'requested' || call.status === 'awaiting_payment') {
     return 'not_ready'
@@ -64,14 +62,14 @@ function getCallWindow(call: CallInfo): CallWindow {
 
   if (call.status === 'paid' && call.paid_at) {
     const paidAt = new Date(call.paid_at).getTime()
-    if (Date.now() > paidAt + POST_PAID_WINDOW_MS) return 'ended'
+    if (Date.now() > paidAt + POST_PAID_CALL_WINDOW_MS) return 'ended'
     return 'open'
   }
 
   if (call.status === 'confirmed' && call.scheduled_start_time) {
     const start = new Date(call.scheduled_start_time).getTime()
     const end = start + call.scheduled_duration_minutes * 60 * 1000
-    if (Date.now() > end + LEGACY_GRACE_MS) return 'ended'
+    if (Date.now() > end + LEGACY_CALL_GRACE_MS) return 'ended'
     return 'open'
   }
 

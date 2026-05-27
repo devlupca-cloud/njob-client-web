@@ -30,6 +30,7 @@
 
   "nav": {
     "home": "Inicio",
+    "messages": "Mensajes",
     "purchases": "Compras",
     "profile": "Perfil"
   },
@@ -249,6 +250,7 @@
     "freeLive": "Gratuita",
     "joinLive": "Unirse al vivo",
     "buyTicket": "Comprar entrada",
+    "sendMessage": "Conversar",
     "videoCall": "Llamada individual",
     "videoCallDisclaimer": "El prestador de servicio tiene derecho a rechazar la llamada si el cliente no cumple con los términos de uso.",
     "videoCallOnline": "Este usuario está en línea y puedes iniciar una videollamada ahora.",
@@ -320,7 +322,11 @@
       "today": "Hoy",
       "yesterday": "Ayer",
       "send": "Enviar mensaje"
-    }
+    },
+    "startError": "No se pudo abrir la conversación. Inténtalo de nuevo.",
+    "selectConversation": "Selecciona una conversación para empezar",
+    "deleteConversation": "Eliminar conversación",
+    "deleteConfirm": "¿Eliminar esta conversación? Saldrá de tu lista; la otra persona conserva el historial."
   },
 
   "subscription": {

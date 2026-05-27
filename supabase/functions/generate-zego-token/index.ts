@@ -195,7 +195,9 @@ serve(async (req) => {
       // ── Live ──────────────────────────────────────────────────────────
       const { data: liveRow } = await supabaseAdmin
         .from("live_streams")
-        .select("id, creator_id, ticket_price, status")
+        .select(
+          "id, creator_id, ticket_price, status, actual_start_time, scheduled_start_time, estimated_duration_minutes",
+        )
         .eq("id", roomID)
         .maybeSingle();
 
@@ -213,6 +215,22 @@ serve(async (req) => {
             JSON.stringify({ success: false, error: "Live encerrada" }),
             { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
           );
+        }
+        // Guarda de janela: mesmo com status ainda 'live'/'scheduled' (não
+        // limpo pelo cron), bloqueia a entrada se a duração já venceu.
+        const liveAnchor =
+          liveRow.actual_start_time ?? liveRow.scheduled_start_time;
+        if (liveAnchor) {
+          const liveEndMs =
+            new Date(liveAnchor).getTime() +
+            (liveRow.estimated_duration_minutes ?? 60) * 60 * 1000 +
+            2 * 60 * 1000;
+          if (Date.now() >= liveEndMs) {
+            return new Response(
+              JSON.stringify({ success: false, error: "Live encerrada" }),
+              { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+            );
+          }
         }
         const isFree = !liveRow.ticket_price || Number(liveRow.ticket_price) === 0;
         if (!isFree) {

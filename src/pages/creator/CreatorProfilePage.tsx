@@ -29,6 +29,7 @@ import CardPack from '@/components/cards/CardPack'
 import BookingCallModal from '@/components/modals/BookingCallModal'
 import { useCreatorOnline } from '@/hooks/useCreatorOnline'
 import { formatCurrency, formatDateTime } from '@/lib/utils'
+import { LIVE_GRACE_MS, isLiveWindowOpen } from '@/lib/timeWindows'
 import type { Creator, PackInfo, LiveStream } from '@/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -114,7 +115,7 @@ async function fetchCreatorProfile(
   userId: string | undefined
 ): Promise<CreatorProfileData> {
   // Fetch tudo em paralelo (RPC + queries não dependem entre si)
-  const [rpcRes, packsRes, livesRes, subscribersRes, isSubscribedRes, profileRes, availabilityRes, purchasedPacksRes, settingsRes] = await Promise.all([
+  const [rpcRes, packsRes, livesRes, subscribersRes, isSubscribedRes, profileRes, purchasedPacksRes, settingsRes] = await Promise.all([
     supabase.rpc('get_creator_details', {
       p_profile_id: profileId,
       p_client_id: userId ?? '00000000-0000-0000-0000-000000000000',
@@ -149,17 +150,6 @@ async function fetchCreatorProfile(
       .select('*')
       .eq('id', profileId)
       .single(),
-    // Check if creator has any future availability (used to show video call button)
-    // Use local date (not UTC) to avoid timezone mismatch — availability_date is stored as local date
-    (() => {
-      const now = new Date()
-      const localToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-      return supabase
-        .from('creator_availability')
-        .select('id', { count: 'exact', head: true })
-        .eq('creator_id', profileId)
-        .gte('availability_date', localToday)
-    })(),
     // Check which packs the user already purchased
     userId
       ? supabase
@@ -190,7 +180,6 @@ async function fetchCreatorProfile(
   if (packsRes.error) console.error('[CreatorProfile] Packs error:', packsRes.error)
   if (livesRes.error) console.error('[CreatorProfile] Lives error:', livesRes.error)
   if (subscribersRes.error) console.error('[CreatorProfile] Subscribers error:', subscribersRes.error)
-  if (availabilityRes.error) console.error('[CreatorProfile] Availability error:', availabilityRes.error)
 
   const purchasedPackIds = new Set(
     ((purchasedPacksRes.data ?? []) as { pack_id: string }[]).map((p) => p.pack_id),
@@ -592,6 +581,9 @@ export default function CreatorProfilePage() {
   const [isBuyingPack, setIsBuyingPack] = useState(false)
   const [showMeetingModal, setShowMeetingModal] = useState(false)
   const [showBookingModal, setShowBookingModal] = useState(false)
+  const [isStartingChat, setIsStartingChat] = useState(false)
+  // Força re-render no instante exato em que a live vence (sem depender de rede).
+  const [, setNowTick] = useState(0)
   const { online: creatorOnlineForCalls } = useCreatorOnline(profileId ?? null)
 
   const { data, isLoading, isError } = useQuery({
@@ -630,6 +622,40 @@ export default function CreatorProfilePage() {
     },
   })
 
+  // Real-time: reage na hora a qualquer mudança nas lives deste creator
+  // (encerramento manual, cron marcando 'finished', nova live etc.).
+  useEffect(() => {
+    if (!profileId) return
+    const channel = supabase
+      .channel(`live-streams-${profileId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'live_streams', filter: `creator_id=eq.${profileId}` },
+        () => queryClient.invalidateQueries({ queryKey: ['creator-profile', profileId] }),
+      )
+      .subscribe()
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [profileId, queryClient])
+
+  // Timer no fim exato da live ativa: ao vencer a janela, força re-render para
+  // que activeLive vire undefined e o botão "AO VIVO — Entrar" suma na hora,
+  // sem precisar de refetch nem do cron.
+  useEffect(() => {
+    const active = data?.lives.find((l) => l.status === 'live')
+    const anchor = active?.actual_start_time ?? active?.scheduled_start_time
+    if (!anchor) return
+    const endAt =
+      new Date(anchor).getTime() +
+      (active!.estimated_duration_minutes ?? 60) * 60_000 +
+      LIVE_GRACE_MS
+    const ms = endAt - Date.now()
+    if (ms <= 0) return
+    const timer = setTimeout(() => setNowTick((n) => n + 1), ms + 250)
+    return () => clearTimeout(timer)
+  }, [data])
+
   if (isLoading) return <ProfileSkeleton />
 
   if (isError || !data) {
@@ -649,10 +675,42 @@ export default function CreatorProfilePage() {
   }
 
   const { creator, packs, lives } = data
-  const activeLive = lives.find((l) => l.status === 'live')
+  // Defensivo: uma live só está "ao vivo" se a janela de duração ainda não
+  // venceu (isLiveWindowOpen). Sem isso, uma live presa em status='live' (cuja
+  // aba do creator fechou antes do encerramento) ficaria como "AO VIVO" para
+  // sempre.
+  const activeLive = lives.find((l) => l.status === 'live' && isLiveWindowOpen(l))
   const scheduledLives = lives.filter((l) => l.status === 'scheduled')
   const photos = creator.imagens.filter((img) => img.type === 'photo')
   const displayPhotos = showAllPhotos ? photos : photos.slice(0, 6)
+
+  // Abre (ou cria) a conversa 1:1 com o creator e navega para o chat.
+  // Acesso aberto: qualquer logado pode conversar; guest é levado ao cadastro.
+  const handleStartConversation = async () => {
+    if (guardGuestAction()) return
+    if (!profileId || isStartingChat) return
+    setIsStartingChat(true)
+    try {
+      const { data: convId, error } = await supabase.rpc(
+        'get_or_create_direct_conversation',
+        { p_peer_id: profileId },
+      )
+      if (error || !convId) throw error ?? new Error('no_conversation')
+      navigate(`/chat/${convId}`, {
+        state: {
+          peerId: profileId,
+          peerName: creator.nome,
+          peerAvatarUrl: creator.foto_perfil,
+          peerIsOnline: creatorOnlineForCalls,
+        },
+      })
+    } catch (err) {
+      console.error('[CreatorProfile] start conversation error:', err)
+      toast({ title: t('chat.startError'), type: 'error' })
+    } finally {
+      setIsStartingChat(false)
+    }
+  }
 
   const handleBuyPack = async (pack: PackInfo) => {
     const userId = currentUser?.id || session?.user?.id
@@ -892,6 +950,24 @@ export default function CreatorProfilePage() {
           </div>
           {/* Subscribers count — hidden until subscriptions are enabled */}
         </div>
+      </div>
+
+      {/* ── Conversar (chat 1:1) — sempre disponível ──────────────────────── */}
+      <div className="px-4 mb-3 max-w-4xl mx-auto w-full">
+        <button
+          onClick={handleStartConversation}
+          disabled={isStartingChat}
+          className="flex items-center justify-center gap-3 w-full px-5 py-3.5 rounded-xl bg-[hsl(var(--card))] border border-[hsl(var(--border))] disabled:opacity-60"
+        >
+          {isStartingChat ? (
+            <Loader2 size={18} className="animate-spin text-[hsl(var(--foreground))]" />
+          ) : (
+            <MessageCircle size={18} className="text-[hsl(var(--foreground))]" />
+          )}
+          <span className="text-sm font-semibold text-[hsl(var(--foreground))]">
+            {t('creator.sendMessage')}
+          </span>
+        </button>
       </div>
 
       {/* ── Action Buttons (Capabilities) ─────────────────────────────────── */}

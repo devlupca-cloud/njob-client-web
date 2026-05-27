@@ -23,7 +23,8 @@ import ChangeNamePage from '@/pages/profile/ChangeNamePage'
 import ChangeEmailPage from '@/pages/profile/ChangeEmailPage'
 import ChangePasswordPage from '@/pages/profile/ChangePasswordPage'
 import ChangeLanguagePage from '@/pages/profile/ChangeLanguagePage'
-import ConversationsPage from '@/pages/chat/ConversationsPage'
+import ChatLayout from '@/pages/chat/ChatLayout'
+import ChatEmpty from '@/pages/chat/ChatEmpty'
 import ChatPage from '@/pages/chat/ChatPage'
 import CouponsPage from '@/pages/coupons/CouponsPage'
 import CouponDetailPage from '@/pages/coupons/CouponDetailPage'
@@ -136,8 +137,14 @@ export const router = createBrowserRouter([
               { path: '/profile/info/email', element: <ChangeEmailPage /> },
               { path: '/profile/info/password', element: <ChangePasswordPage /> },
               { path: '/profile/info/language', element: <ChangeLanguagePage /> },
-              { path: '/chat', element: <ConversationsPage /> },
-              { path: '/chat/:id', element: <ChatPage /> },
+              {
+                path: '/chat',
+                element: <ChatLayout />,
+                children: [
+                  { index: true, element: <ChatEmpty /> },
+                  { path: ':id', element: <ChatPage /> },
+                ],
+              },
               { path: '/coupons', element: <CouponsPage /> },
               { path: '/coupons/:id', element: <CouponDetailPage /> },
               { path: '/subscription', element: <SubscriptionPage /> },

@@ -180,7 +180,7 @@ export interface LiveStream {
   actual_end_time: string | null
   ticket_price: number | null
   currency: string
-  status: 'scheduled' | 'live' | 'ended'
+  status: 'scheduled' | 'live' | 'finished' | 'cancelled'
   stream_url: string | null
   cover_image_url: string | null
   estimated_duration_minutes: number | null
@@ -289,17 +289,6 @@ export interface AppNotification {
   created_at: string
   read_at: string | null
   data: Record<string, unknown> | null
-}
-
-// ─── Availability ─────────────────────────────────────────────────────────────
-
-export interface AvailabilitySlot {
-  id: string
-  creator_id: string
-  day_of_week: number
-  start_time: string
-  end_time: string
-  is_available: boolean
 }
 
 // ─── Enums ───────────────────────────────────────────────────────────────────

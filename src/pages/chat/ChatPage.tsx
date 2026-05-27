@@ -217,6 +217,17 @@ export default function ChatPage() {
     queryKey: ['vw_messages', conversationId],
     queryFn: async () => {
       if (!conversationId) return []
+      // Meu cleared_at nesta conversa: oculta mensagens anteriores à exclusão.
+      let clearedAt: string | null = null
+      if (user?.id) {
+        const { data: part } = await supabase
+          .from('conversation_participants')
+          .select('cleared_at')
+          .eq('conversation_id', conversationId)
+          .eq('profile_id', user.id)
+          .maybeSingle()
+        clearedAt = (part as { cleared_at: string | null } | null)?.cleared_at ?? null
+      }
       const { data, error } = await supabase
         .from('vw_messages')
         .select('*')
@@ -225,7 +236,11 @@ export default function ChatPage() {
         .limit(100)
 
       if (error) throw error
-      const rows = ((data ?? []) as VwMessage[]).reverse()
+      let rows = ((data ?? []) as VwMessage[]).reverse()
+      if (clearedAt) {
+        const clearedMs = new Date(clearedAt).getTime()
+        rows = rows.filter((m) => !!m.created_at && new Date(m.created_at).getTime() > clearedMs)
+      }
       setMessages(rows)
       return rows
     },
@@ -404,16 +419,13 @@ export default function ChatPage() {
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div
-      className="flex flex-col bg-[hsl(var(--background))]"
-      style={{ height: 'calc(100vh - 4rem)' }}
-    >
+    <div className="flex flex-col w-full h-full min-h-0 bg-[hsl(var(--background))]">
       {/* Header */}
       <div className="shrink-0 bg-[hsl(var(--background))] border-b border-[hsl(var(--border))]">
       <div className="flex items-center gap-3 px-4 py-3 max-w-3xl mx-auto">
         <button
           onClick={() => navigate('/chat')}
-          className="p-1.5 -ml-1.5 text-[hsl(var(--foreground))] rounded-full hover:bg-[hsl(var(--card))] transition-colors"
+          className="md:hidden p-1.5 -ml-1.5 text-[hsl(var(--foreground))] rounded-full hover:bg-[hsl(var(--card))] transition-colors"
           aria-label={t('common.back')}
         >
           <ArrowLeft className="w-5 h-5" />

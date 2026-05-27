@@ -93,8 +93,37 @@ serve(async (req) => {
       }
     }
 
-    // 2.2) LIVE TICKET: verificar se já foi comprado pelo usuário
+    // 2.2) LIVE TICKET: bloquear pagamento de live encerrada + já comprada
     if (product_type === "live_ticket") {
+      // Guarda autoritativa: "acabou a live, acabou". Calcula a janela na hora
+      // (actual_start_time, ou scheduled_start_time se ainda não iniciou, +
+      // duração + 2 min de carência), sem depender do status estar "limpo".
+      // Impede o cliente de pagar por uma live que já terminou.
+      const { data: liveRow } = await supabaseAdmin
+        .from("live_streams")
+        .select(
+          "status, actual_start_time, scheduled_start_time, estimated_duration_minutes",
+        )
+        .eq("id", product_id)
+        .maybeSingle();
+
+      if (!liveRow) {
+        throw new Error("Live não encontrada.");
+      }
+      if (liveRow.status === "finished" || liveRow.status === "cancelled") {
+        throw new Error("Esta live já foi encerrada.");
+      }
+      const anchor = liveRow.actual_start_time ?? liveRow.scheduled_start_time;
+      if (anchor) {
+        const endMs =
+          new Date(anchor).getTime() +
+          (liveRow.estimated_duration_minutes ?? 60) * 60_000 +
+          2 * 60_000;
+        if (Date.now() >= endMs) {
+          throw new Error("Esta live já foi encerrada.");
+        }
+      }
+
       const { data: existingTicket } = await supabaseAdmin
         .from("live_stream_tickets")
         .select("id")

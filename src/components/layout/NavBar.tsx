@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { Home, User, ShoppingBag } from 'lucide-react'
+import { Home, User, ShoppingBag, MessageCircle } from 'lucide-react'
 import Logo from '@/components/ui/Logo'
 import { useGuestGuard } from '@/components/ui/GuestModal'
 import { useTranslation } from 'react-i18next'
@@ -11,6 +11,7 @@ export default function NavBar() {
 
   const navItems = [
     { icon: Home,          label: t('nav.home'),      path: '/home',       guestAllowed: true },
+    { icon: MessageCircle, label: t('nav.messages'),  path: '/chat',       guestAllowed: false },
     { icon: ShoppingBag,   label: t('nav.purchases'), path: '/purchases',  guestAllowed: false },
     { icon: User,          label: t('nav.profile'),   path: '/profile',    guestAllowed: false },
   ]

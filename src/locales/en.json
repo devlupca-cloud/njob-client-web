@@ -30,6 +30,7 @@
 
   "nav": {
     "home": "Home",
+    "messages": "Messages",
     "purchases": "Purchases",
     "profile": "Profile"
   },
@@ -255,6 +256,7 @@
     "freeLive": "Free",
     "joinLive": "Join live",
     "buyTicket": "Buy ticket",
+    "sendMessage": "Message",
     "videoCall": "Individual call",
     "videoCallDisclaimer": "The service provider has the right to decline the call if the client does not comply with the terms of use.",
     "videoCallOnline": "This user is online and you can start a video call now.",
@@ -326,7 +328,11 @@
       "today": "Today",
       "yesterday": "Yesterday",
       "send": "Send message"
-    }
+    },
+    "startError": "Could not open the conversation. Please try again.",
+    "selectConversation": "Select a conversation to start",
+    "deleteConversation": "Delete conversation",
+    "deleteConfirm": "Delete this conversation? It will leave your list; the other person keeps the history."
   },
 
   "subscription": {

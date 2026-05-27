@@ -15,6 +15,7 @@ import {
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils'
+import { POST_PAID_CALL_WINDOW_MS } from '@/lib/timeWindows'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -45,7 +46,7 @@ interface LiveTicket {
     cover_image_url: string | null
     scheduled_start_time: string
     ticket_price: number | null
-    status: 'scheduled' | 'live' | 'ended'
+    status: 'scheduled' | 'live' | 'finished' | 'cancelled'
   } | null
 }
 
@@ -172,7 +173,8 @@ function liveStatusClass(status: string): string {
   switch (status) {
     case 'live': return 'text-red-400 bg-red-500/10'
     case 'scheduled': return 'text-blue-400 bg-blue-500/10'
-    case 'ended': return 'text-[hsl(var(--muted-foreground))] bg-[hsl(var(--secondary))]'
+    case 'finished': return 'text-[hsl(var(--muted-foreground))] bg-[hsl(var(--secondary))]'
+    case 'cancelled': return 'text-[hsl(var(--muted-foreground))] bg-[hsl(var(--secondary))]'
     default: return 'text-[hsl(var(--muted-foreground))] bg-[hsl(var(--secondary))]'
   }
 }
@@ -264,7 +266,7 @@ function LiveList({ lives, now, onTap }: { lives: LiveTicket[]; now: Date; onTap
         // Only allow entry when live is actually streaming
         const isLive = live?.status === 'live'
         const isScheduled = live?.status === 'scheduled'
-        const isEnded = live?.status === 'ended'
+        const isEnded = live?.status === 'finished' || live?.status === 'cancelled'
         const canEnter = isLive
 
         // Countdown for scheduled lives
@@ -307,7 +309,7 @@ function LiveList({ lives, now, onTap }: { lives: LiveTicket[]; now: Date; onTap
                 </span>
               )}
               {isEnded && (
-                <span className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded-full mt-1 ${liveStatusClass('ended')}`}>
+                <span className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded-full mt-1 ${liveStatusClass('finished')}`}>
                   {t('purchases.liveStatuses.ended')}
                 </span>
               )}
@@ -368,7 +370,6 @@ function CallList({ calls, now, onTap }: { calls: CallPurchase[]; now: Date; onT
 
         // Fluxo novo (paid): janela = paid_at + 2h, sem agendamento prévio.
         // Legado (confirmed): janela = scheduled_start_time ± duration.
-        const POST_PAID_WINDOW_MS = 2 * 60 * 60 * 1000
         const isPaidFlow = call.status === 'paid' && !!call.paid_at
         const isLegacyConfirmed =
           call.status === 'confirmed' && !!call.scheduled_start_time
@@ -385,7 +386,7 @@ function CallList({ calls, now, onTap }: { calls: CallPurchase[]; now: Date; onT
 
         const paidAt = call.paid_at ? new Date(call.paid_at) : null
         const paidWindowEnd = paidAt
-          ? new Date(paidAt.getTime() + POST_PAID_WINDOW_MS)
+          ? new Date(paidAt.getTime() + POST_PAID_CALL_WINDOW_MS)
           : null
 
         // canEnter:

@@ -3,6 +3,7 @@ import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-quer
 import { Search, Users, RefreshCw } from 'lucide-react'
 import Logo from '@/components/ui/Logo'
 import { supabase } from '@/lib/supabase'
+import { isLiveWindowOpen } from '@/lib/timeWindows'
 import { useAuthStore } from '@/store/authStore'
 import type { Creator } from '@/types'
 import CardCreator, { CardCreatorSkeleton } from '@/components/cards/CardCreator'
@@ -128,11 +129,40 @@ async function fetchCreators(
     }
   }
 
+  // Defensivo: o RPC marca 'em live' só por status='live', sem checar a janela
+  // de tempo. Uma live presa em 'live' (cuja aba do creator fechou antes do
+  // encerramento) ficaria "Ao vivo agora" para sempre. Confirmamos a janela
+  // consultando live_streams para os ids marcados como 'em live'. Mesma
+  // âncora/carência do fn_expire_stale_lives. (A correção definitiva é
+  // server-side em get_creators_filtered + fn_expire_stale_lives.)
+  const liveIds = rows.filter((r) => r.status === 'em live').map((r) => r.id)
+  const reallyLive = new Set<string>()
+  if (liveIds.length > 0) {
+    const { data: liveRows } = await supabase
+      .from('live_streams')
+      .select('creator_id, actual_start_time, scheduled_start_time, estimated_duration_minutes')
+      .eq('status', 'live')
+      .in('creator_id', liveIds)
+    for (const l of (liveRows ?? []) as Array<{
+      creator_id: string
+      actual_start_time: string | null
+      scheduled_start_time: string | null
+      estimated_duration_minutes: number | null
+    }>) {
+      if (isLiveWindowOpen(l)) reallyLive.add(l.creator_id)
+    }
+  }
+
   return rows.map((row: CreatorFromRPC): Creator => {
     const s = settingsMap.get(row.id)
-    // 'em live' tem prioridade; caso contrário a presença decide online/offline.
+    // 'em live' tem prioridade, mas só se a janela da live ainda estiver aberta;
+    // caso contrário a presença decide online/offline.
     const status =
-      row.status === 'em live' ? 'em live' : presenceMap.get(row.id) ? 'online' : 'offline'
+      row.status === 'em live' && reallyLive.has(row.id)
+        ? 'em live'
+        : presenceMap.get(row.id)
+          ? 'online'
+          : 'offline'
     return {
       id: row.id,
       nome: row.nome,
@@ -292,6 +322,26 @@ export default function HomePage() {
     }
   }, [])
 
+  // Real-time de lives: quando uma live muda de status (host encerra, cron marca
+  // 'finished', nova live entra no ar), refazemos o fetch — que reaplica o filtro
+  // de janela e atualiza a seção "Ao vivo agora" na hora.
+  useEffect(() => {
+    const channel = supabase
+      .channel('home-live-streams')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'live_streams' },
+        () => {
+          void queryClient.invalidateQueries({ queryKey: ['creators'] })
+        },
+      )
+      .subscribe()
+
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [queryClient])
+
   // Aplica o overlay de presença sobre a lista buscada. 'em live' tem prioridade.
   const displayCreators = useMemo(() => {
     if (!creators) return creators
@@ -398,11 +448,18 @@ export default function HomePage() {
           <>
             {hasActiveFilterOrSearch ? (
               (() => {
-                // No filtro "Online", mostra só quem está de fato online (presença real).
+                // A RPC filtra "online" por is_active e "lives" por status='live'
+                // (sem janela de tempo). Reaplicamos o status real já corrigido
+                // no client (presença + janela da live) para a lista do filtro
+                // bater com o badge — senão um creator com live vencida ainda
+                // apareceria sob "Lives" sem estar ao vivo.
+                const base = displayCreators ?? []
                 const list =
                   activeFilter === 'online'
-                    ? (displayCreators ?? []).filter((c) => c.status === 'online')
-                    : displayCreators ?? []
+                    ? base.filter((c) => c.status === 'online')
+                    : activeFilter === 'lives'
+                      ? base.filter((c) => c.status === 'em live')
+                      : base
                 return list.length === 0 ? (
                   <EmptyState query={search} />
                 ) : (
