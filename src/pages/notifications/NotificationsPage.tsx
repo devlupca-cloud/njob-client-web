@@ -251,6 +251,10 @@ export default function NotificationsPage() {
     queryKey: ['notifications', userId],
     queryFn: () => fetchNotifications(userId!),
     enabled: !!userId,
+    // Polling 30s: as notificações são INSERidas pelo webhook (sem realtime
+    // assinado aqui). Sem polling o badge ficava parado até reload.
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
   })
 
   const unreadCount = notifications.filter((n) => !n.is_read).length
