@@ -13,6 +13,10 @@ import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { useAuth } from '@/hooks/useAuth'
 import { useTranslation } from 'react-i18next'
+import { useToast } from '@/components/ui/Toast'
+
+const MAX_AVATAR_BYTES = 5 * 1024 * 1024
+const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 
 interface NavSection {
   icon: React.ElementType
@@ -26,6 +30,7 @@ export default function ProfilePage() {
   const { signOut } = useAuth()
   const { profile, user, setProfile } = useAuthStore()
   const { t } = useTranslation()
+  const { toast } = useToast()
   const [uploading, setUploading] = useState(false)
   const [avatarError, setAvatarError] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -58,32 +63,49 @@ export default function ProfilePage() {
     const file = e.target.files?.[0]
     if (!file || !user?.id) return
 
+    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+      toast({ type: 'error', title: t('profile.avatarInvalidType') })
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      return
+    }
+
+    if (file.size > MAX_AVATAR_BYTES) {
+      toast({ type: 'error', title: t('profile.avatarTooLarge') })
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      return
+    }
+
     setUploading(true)
     try {
-      const ext = file.name.split('.').pop()
-      const filePath = `avatars/${user.id}.${ext}`
+      const ext = (file.name.split('.').pop() ?? 'jpg').toLowerCase()
+      const path = `profiles/${user.id}/avatar.${ext}`
 
       const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(filePath, file, { upsert: true })
+        .from('images')
+        .upload(path, file, { upsert: true, contentType: file.type })
 
       if (uploadError) throw uploadError
 
       const { data: urlData } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(filePath)
+        .from('images')
+        .getPublicUrl(path)
 
-      const avatar_url = urlData.publicUrl
+      const avatar_url = `${urlData.publicUrl}?t=${Date.now()}`
 
-      await supabase
+      const { error: updateError } = await supabase
         .from('profiles')
         .update({ avatar_url })
         .eq('id', user.id)
 
+      if (updateError) throw updateError
+
       setProfile({ ...profile!, avatar_url })
       setAvatarError(false)
+      toast({ type: 'success', title: t('profile.avatarSuccess') })
     } catch (err) {
       console.error(t('profile.avatarError'), err)
+      const description = err instanceof Error ? err.message : undefined
+      toast({ type: 'error', title: t('profile.avatarError'), description })
     } finally {
       setUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''

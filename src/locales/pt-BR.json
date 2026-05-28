@@ -192,7 +192,10 @@
   "profile": {
     "title": "Perfil",
     "changeAvatar": "Alterar foto de perfil",
-    "avatarError": "Erro ao fazer upload do avatar:",
+    "avatarSuccess": "Foto de perfil atualizada",
+    "avatarError": "Não foi possível atualizar a foto. Tente novamente.",
+    "avatarTooLarge": "Imagem muito grande. Use uma foto de até 5 MB.",
+    "avatarInvalidType": "Formato inválido. Use JPG, PNG, WEBP ou GIF.",
     "logout": "Sair da conta",
     "personalInfo": "Informações pessoais",
     "subscription": "Assinatura",
