@@ -152,7 +152,11 @@ function MessageBubble({
   msg: VwMessage
   isMine: boolean
 }) {
-  const isRead = isMine ? msg.is_read_by_client : msg.is_read_by_creator
+  // Check-duplo na minha mensagem aparece quando o OUTRO leu. No client_web o
+  // remetente é tipicamente o cliente — quem leu é o creator. is_read_by_creator
+  // (não is_read_by_client) é o sinal correto. Para mensagens recebidas o ícone
+  // não é desenhado, então a outra metade do ternário fica inerte.
+  const isRead = isMine ? msg.is_read_by_creator : msg.is_read_by_client
 
   if (isMine) {
     return (
