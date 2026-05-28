@@ -520,6 +520,7 @@
     "goToPurchases": "Ir para compras",
     "callWith": "Chamada com {{creatorName}}",
     "roomOpensEarly": "A sala abre 5 minutos antes do horário agendado. Volte às {{time}}.",
+    "notReady": "Confirmando seu pagamento… A sala abre em alguns segundos.",
     "callEnded": "Chamada encerrada",
     "callPast": "Esta chamada já passou do horário agendado.",
     "seePurchases": "Ver minhas compras",

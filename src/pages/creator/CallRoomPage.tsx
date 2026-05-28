@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { ArrowLeft, Video, Loader2, ShieldAlert } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -84,6 +84,7 @@ export default function CallRoomPage() {
   const { user, profile } = useAuthStore()
   const { t, i18n } = useTranslation()
   const { toast } = useToast()
+  const queryClient = useQueryClient()
   const [joined, setJoined] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const zegoRef = useRef<InstanceType<typeof ZegoUIKitPrebuilt> | null>(null)
@@ -94,9 +95,40 @@ export default function CallRoomPage() {
     queryKey: ['call-room', id],
     queryFn: () => fetchCall(id!, user!.id),
     enabled: !!id && !!user?.id,
+    // Enquanto a call ainda está em requested/awaiting_payment, polling de 3s
+    // garante que pegamos o webhook flipando p/ 'paid' mesmo se Realtime atrasar.
+    refetchInterval: (q) => {
+      const status = q.state.data?.status
+      return status === 'requested' || status === 'awaiting_payment' ? 3000 : false
+    },
   })
 
   const callWindow = call ? getCallWindow(call) : null
+
+  // Realtime sempre ativo: pega awaiting_payment → paid (webhook do Stripe)
+  // sem depender do polling. Roda em paralelo ao useEffect de Zego abaixo,
+  // que só assina quando a sala já está open.
+  useEffect(() => {
+    if (!id) return
+    const channel = supabase
+      .channel(`call-status:${id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'one_on_one_calls',
+          filter: `id=eq.${id}`,
+        },
+        () => {
+          void queryClient.invalidateQueries({ queryKey: ['call-room', id] })
+        },
+      )
+      .subscribe()
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [id, queryClient])
 
   // Traduz a UI do ZegoCloud UIKit (SDK só vem em en/zh).
   useEffect(() => {
@@ -267,13 +299,13 @@ export default function CallRoomPage() {
             <div className="text-center">
               <Loader2 className="w-10 h-10 animate-spin text-[hsl(var(--primary))] mx-auto mb-3" />
               <p className="text-sm font-medium text-[hsl(var(--foreground))]">
-                {t('callRoom.notReady') ?? 'Aguardando pagamento ser confirmado…'}
+                {t('callRoom.notReady')}
               </p>
               <button
                 onClick={() => navigate('/purchases')}
                 className="mt-6 px-6 py-2.5 rounded-xl bg-[hsl(var(--primary))] text-white text-sm font-semibold"
               >
-                {t('callRoom.seePurchases') ?? 'Ver compras'}
+                {t('callRoom.seePurchases')}
               </button>
             </div>
           </main>

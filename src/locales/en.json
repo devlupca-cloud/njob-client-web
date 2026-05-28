@@ -519,6 +519,7 @@
     "goToPurchases": "Go to purchases",
     "callWith": "Call with {{creatorName}}",
     "roomOpensEarly": "The room opens 5 minutes before the scheduled time. Come back at {{time}}.",
+    "notReady": "Confirming your payment… The room opens in a few seconds.",
     "callEnded": "Call ended",
     "callPast": "This call has already passed its scheduled time.",
     "seePurchases": "See my purchases",
