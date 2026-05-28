@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -258,6 +258,31 @@ export default function NotificationsPage() {
   })
 
   const unreadCount = notifications.filter((n) => !n.is_read).length
+
+  // Realtime: nova notificação chega instantâneo (não espera o polling de 30s).
+  useEffect(() => {
+    if (!userId) return
+    const channel = supabase
+      .channel(`notifications:${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${userId}`,
+        },
+        () => {
+          void queryClient.invalidateQueries({ queryKey: ['notifications', userId] })
+        },
+      )
+      .subscribe((status) => {
+        if (status !== 'SUBSCRIBED') console.warn('[notifications-realtime]', status)
+      })
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [userId, queryClient])
 
   // ── Mark one as read ───────────────────────────────────────────────────────
 

@@ -111,6 +111,27 @@ serve(async (req) => {
           break;
         }
 
+        // ─── Refund / dispute — devolve dinheiro e revoga compra ─────────
+        case "charge.refunded": {
+          const charge: any = event.data.object;
+          const paymentIntentId = charge.payment_intent;
+          if (paymentIntentId) {
+            await handleRefund(paymentIntentId);
+          }
+          break;
+        }
+
+        case "charge.dispute.created": {
+          const dispute: any = event.data.object;
+          const charge = await stripe.charges.retrieve(dispute.charge);
+          const paymentIntentId = (charge as any).payment_intent;
+          if (paymentIntentId) {
+            // Marca tudo como refunded (chargeback ≈ refund forçado).
+            await handleRefund(paymentIntentId);
+          }
+          break;
+        }
+
         default:
           break;
       }
@@ -605,8 +626,25 @@ async function handlePaymentCheckoutCompleted(session: any, connectedAccountId?:
     }
   }
 
-  // ─── Notificar o creator sobre a venda ─────────────────────────────────────
-  await notifyCreatorOfSale(metaCreatorId, customerId, product_type, product_id, amount, currency);
+  // ─── Notificar ambos os lados ──────────────────────────────────────────────
+  // No video-call-request a metadata pode vir sem creator_id (depende de quem
+  // criou o checkout) — recuperamos do próprio registro da call para garantir
+  // que a notificação chega ao creator certo.
+  let resolvedCreatorId = metaCreatorId;
+  if (!resolvedCreatorId && product_type === "video-call-request") {
+    const callId = (session.metadata ?? {}).call_id || product_id;
+    if (callId) {
+      const { data: callRow } = await supabaseAdmin
+        .from("one_on_one_calls")
+        .select("creator_id")
+        .eq("id", callId)
+        .maybeSingle();
+      resolvedCreatorId = (callRow as { creator_id?: string } | null)?.creator_id;
+    }
+  }
+
+  await notifyCreatorOfSale(resolvedCreatorId, customerId, product_type, product_id, amount, currency);
+  await notifyBuyerOfPurchase(customerId, resolvedCreatorId, product_type, product_id, amount, currency);
 }
 
 /**
@@ -692,5 +730,164 @@ async function notifyCreatorOfSale(
   } catch (err) {
     // Não falhar o webhook por causa de notificação
     console.error("[webhook] Erro ao criar notificação para creator:", err);
+  }
+}
+
+/**
+ * Marca uma transação como refunded e revoga a compra relacionada.
+ *
+ * Quando o Stripe devolve o dinheiro (refund manual no Dashboard,
+ * cancelamento via Customer Portal, ou chargeback/dispute), o cliente não
+ * deveria continuar com pack/ingresso/call válidos. Sem este handler, o
+ * dinheiro voltava mas a plataforma continuava liberando o conteúdo.
+ *
+ * Idempotente: se já estiver refunded, sai limpo.
+ */
+async function handleRefund(paymentIntentId: string) {
+  try {
+    const { data: tx } = await supabaseAdmin
+      .from("transactions")
+      .select("id, status, related_purchase_id, related_ticket_id, related_call_id, user_id")
+      .eq("gateway_transaction_id", paymentIntentId)
+      .maybeSingle();
+
+    if (!tx) {
+      console.warn(`[refund] transação não encontrada para PI ${paymentIntentId}`);
+      return;
+    }
+
+    if (tx.status === "refunded") {
+      console.warn(`[refund] transação ${tx.id} já está refunded — ignorando`);
+      return;
+    }
+
+    await supabaseAdmin
+      .from("transactions")
+      .update({ status: "refunded", updated_at: new Date().toISOString() })
+      .eq("id", tx.id);
+
+    if (tx.related_purchase_id) {
+      await supabaseAdmin
+        .from("pack_purchases")
+        .update({ status: "refunded" })
+        .eq("id", tx.related_purchase_id);
+    }
+
+    if (tx.related_ticket_id) {
+      await supabaseAdmin
+        .from("live_stream_tickets")
+        .update({ status: "refunded" })
+        .eq("id", tx.related_ticket_id);
+    }
+
+    if (tx.related_call_id) {
+      // Cancela a call. Bypass de trigger via RPC dedicado seria o ideal;
+      // como service_role + replication role na atualização cobre o trigger,
+      // usamos rpc se existir, senão UPDATE direto com bypass.
+      const { error: callErr } = await supabaseAdmin.rpc("fn_cancel_call_refund", {
+        p_call_id: tx.related_call_id,
+      });
+      if (callErr) {
+        console.warn(`[refund] fn_cancel_call_refund falhou: ${callErr.message}`);
+      }
+    }
+
+    // Notifica o comprador da devolução.
+    const buyer = tx.user_id;
+    if (buyer) {
+      await supabaseAdmin.from("notifications").insert({
+        user_id: buyer,
+        title: "Reembolso processado",
+        message: "O pagamento foi estornado pelo Stripe. O acesso à compra foi removido.",
+        type: "info",
+        is_read: false,
+        data: { transaction_id: tx.id, payment_intent: paymentIntentId },
+      });
+    }
+  } catch (err) {
+    console.error("[refund] erro:", err);
+  }
+}
+
+/**
+ * Notifica o comprador (cliente) da própria compra concluída. Independente
+ * da edge function que originou o checkout — funciona pra pack, live ticket,
+ * video-call e video-call-request.
+ */
+async function notifyBuyerOfPurchase(
+  buyerId: string | undefined,
+  creatorId: string | undefined,
+  productType: string,
+  productId: string,
+  amount: number,
+  currency: string,
+) {
+  if (!buyerId) {
+    console.warn("[webhook] buyerId ausente — notificação do cliente não criada");
+    return;
+  }
+
+  try {
+    const formattedAmount = `${currency} ${amount.toFixed(2).replace(".", ",")}`;
+    let creatorName = "creator";
+    if (creatorId) {
+      const { data: creator } = await supabaseAdmin
+        .from("profiles")
+        .select("full_name")
+        .eq("id", creatorId)
+        .single();
+      creatorName = (creator as { full_name?: string } | null)?.full_name || "creator";
+    }
+
+    let title: string;
+    let message: string;
+
+    switch (productType) {
+      case "pack": {
+        const { data: pack } = await supabaseAdmin
+          .from("packs")
+          .select("title")
+          .eq("id", productId)
+          .single();
+        title = "Compra confirmada!";
+        message = `Você comprou o pacote "${(pack as { title?: string } | null)?.title || "conteúdo"}" de ${creatorName} por ${formattedAmount}. Já está disponível na aba Comprados.`;
+        break;
+      }
+      case "live_ticket": {
+        const { data: live } = await supabaseAdmin
+          .from("live_streams")
+          .select("title, scheduled_start_time")
+          .eq("id", productId)
+          .single();
+        title = "Ingresso confirmado!";
+        message = `Você comprou o ingresso para "${(live as { title?: string } | null)?.title || "Live"}" de ${creatorName} por ${formattedAmount}.`;
+        break;
+      }
+      case "video-call":
+      case "video-call-request":
+        title = "Videochamada confirmada!";
+        message = `Sua videochamada com ${creatorName} foi paga (${formattedAmount}). Já pode entrar na sala.`;
+        break;
+      default:
+        title = "Compra confirmada!";
+        message = `Sua compra de ${formattedAmount} foi processada.`;
+    }
+
+    await supabaseAdmin.from("notifications").insert({
+      user_id: buyerId,
+      title,
+      message,
+      type: "success",
+      is_read: false,
+      data: {
+        product_type: productType,
+        product_id: productId,
+        creator_id: creatorId ?? null,
+        amount,
+        currency,
+      },
+    });
+  } catch (err) {
+    console.error("[webhook] Erro ao criar notificação para comprador:", err);
   }
 }

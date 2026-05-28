@@ -72,12 +72,14 @@ serve(async (req) => {
             .eq("creator_id", userId)
         ).data?.map((l: any) => l.id) ?? []),
 
-      // Receita de videochamadas
+      // Receita de videochamadas. Inclui 'paid' (fluxo novo on-demand,
+      // chamada paga e ainda não realizada/encerrada) e 'completed' (já
+      // concluída). 'confirmed' é legacy do fluxo de slots fixo.
       supabaseAdmin
         .from("one_on_one_calls")
         .select("call_price, creator_share, platform_fee, created_at")
         .eq("creator_id", userId)
-        .eq("status", "completed")
+        .in("status", ["paid", "confirmed", "completed"])
         .gte("created_at", startDate)
         .lte("created_at", endDate),
 
