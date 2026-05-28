@@ -31,99 +31,103 @@ serve(async (req) => {
       Stripe.createSubtleCryptoProvider(),
     );
 
-    // Idempotencia: checar se já foi processado (sem inserir ainda)
-    const { data: existing } = await supabaseAdmin
+    // Idempotência atômica: marca o evento como processado JÁ. Se outro
+    // worker do Stripe Webhook bateu primeiro com o mesmo event.id, o
+    // INSERT viola a PK e devolvemos 200 sem reprocessar. Padrão SELECT+INSERT
+    // não bastava — o intervalo entre as duas chamadas é janela de race em
+    // retry simultâneo do Stripe.
+    const { error: lockErr } = await supabaseAdmin
       .from("processed_webhook_events")
-      .select("id")
-      .eq("id", event.id)
-      .maybeSingle();
+      .insert({ id: event.id });
 
-    if (existing) {
-      return new Response(
-        JSON.stringify({ received: true, duplicate: true }),
-        { status: 200 },
-      );
+    if (lockErr) {
+      const msg = lockErr.message ?? "";
+      if (lockErr.code === "23505" || msg.includes("duplicate key")) {
+        return new Response(
+          JSON.stringify({ received: true, duplicate: true }),
+          { status: 200 },
+        );
+      }
+      // Erro inesperado de DB ao reservar o lock — propaga para o Stripe
+      // retentar de novo (não silenciar).
+      throw lockErr;
     }
 
     // Conta conectada (para compras via Stripe Connect)
     const connectedAccountId = event.account;
 
-    switch (event.type) {
-      // ─── Compras one-time (packs, lives, video-calls) ─────────────────
-      case "checkout.session.completed": {
-        const session: any = event.data.object;
+    try {
+      switch (event.type) {
+        // ─── Compras one-time (packs, lives, video-calls) ─────────────────
+        case "checkout.session.completed": {
+          const session: any = event.data.object;
 
-        // Assinatura concluida via checkout
-        if (session.mode === "subscription" && session.payment_status === "paid") {
-          await handleSubscriptionCheckoutCompleted(session);
+          // Assinatura concluida via checkout
+          if (session.mode === "subscription" && session.payment_status === "paid") {
+            await handleSubscriptionCheckoutCompleted(session);
+            break;
+          }
+
+          // Compras one-shot pagas
+          if (session.mode === "payment" && session.payment_status === "paid") {
+            await handlePaymentCheckoutCompleted(session, connectedAccountId);
+          }
           break;
         }
 
-        // Compras one-shot pagas
-        if (session.mode === "payment" && session.payment_status === "paid") {
-          await handlePaymentCheckoutCompleted(session, connectedAccountId);
-        }
-        break;
-      }
-
-      // ─── Subscription lifecycle events ────────────────────────────────
-      case "customer.subscription.created":
-      case "customer.subscription.updated": {
-        const subscription: any = event.data.object;
-        await upsertSubscription(subscription);
-        break;
-      }
-
-      case "customer.subscription.deleted": {
-        const subscription: any = event.data.object;
-        await cancelSubscription(subscription);
-        break;
-      }
-
-      case "invoice.paid": {
-        const invoice: any = event.data.object;
-        if (invoice.subscription) {
-          // Renovacao de assinatura — atualizar periodo
-          const subscription = await stripe.subscriptions.retrieve(invoice.subscription);
+        // ─── Subscription lifecycle events ────────────────────────────────
+        case "customer.subscription.created":
+        case "customer.subscription.updated": {
+          const subscription: any = event.data.object;
           await upsertSubscription(subscription);
+          break;
         }
-        break;
-      }
 
-      case "invoice.payment_failed": {
-        const invoice: any = event.data.object;
-        if (invoice.subscription) {
-          // Marcar assinatura como past_due
-          await supabaseAdmin
-            .from("creator_subscriptions")
-            .update({ status: "past_due", updated_at: new Date().toISOString() })
-            .eq("gateway_subscription_id", invoice.subscription);
+        case "customer.subscription.deleted": {
+          const subscription: any = event.data.object;
+          await cancelSubscription(subscription);
+          break;
         }
-        break;
-      }
 
-      default:
-        break;
+        case "invoice.paid": {
+          const invoice: any = event.data.object;
+          if (invoice.subscription) {
+            // Renovacao de assinatura — atualizar periodo
+            const subscription = await stripe.subscriptions.retrieve(invoice.subscription);
+            await upsertSubscription(subscription);
+          }
+          break;
+        }
+
+        case "invoice.payment_failed": {
+          const invoice: any = event.data.object;
+          if (invoice.subscription) {
+            // Marcar assinatura como past_due
+            await supabaseAdmin
+              .from("creator_subscriptions")
+              .update({ status: "past_due", updated_at: new Date().toISOString() })
+              .eq("gateway_subscription_id", invoice.subscription);
+          }
+          break;
+        }
+
+        default:
+          break;
+      }
+    } catch (handlerErr) {
+      // Handler falhou após reservarmos o lock. Liberamos a linha para que
+      // o Stripe possa reentregar o evento — caso contrário o pagamento
+      // ficaria "marcado como processado" sem ter sido aplicado.
+      await supabaseAdmin
+        .from("processed_webhook_events")
+        .delete()
+        .eq("id", event.id);
+      throw handlerErr;
     }
-
-    // Marcar como processado APÓS sucesso (permite retry se falhar)
-    await supabaseAdmin
-      .from("processed_webhook_events")
-      .insert({ id: event.id });
 
     return new Response(JSON.stringify({ received: true }), { status: 200 });
   } catch (error: any) {
     console.error("Erro no webhook:", error?.message ?? error);
-
-    if (
-      (error?.message || "").includes("duplicate key value") ||
-      (error?.message || "").includes("23505")
-    ) {
-      return new Response(
-        JSON.stringify({ received: true, deduped: true }),
-        { status: 200 },
-      );
-    }
 
     return new Response(
       JSON.stringify({ error: error?.message ?? "unknown" }),
