@@ -8,8 +8,20 @@
 /** Carência após o fim teórico da live antes de considerá-la encerrada. */
 export const LIVE_GRACE_MS = 2 * 60 * 1000
 
-/** Janela para entrar numa videochamada paga, contada a partir de paid_at. */
-export const POST_PAID_CALL_WINDOW_MS = 2 * 60 * 60 * 1000
+/**
+ * Janela para entrar numa videochamada paga: igual à duração comprada,
+ * contada a partir de paid_at. Pagou 30 min → 30 min pra entrar.
+ * Depois disso o slot expira (creator não precisa esperar no-show eterno).
+ */
+export function getPaidCallWindowMs(durationMinutes: number): number {
+  return durationMinutes * 60 * 1000
+}
+
+/** Fim da janela de entrada de uma call paga. */
+export function getPaidCallEnd(paidAt: string | Date, durationMinutes: number): Date {
+  const paidMs = typeof paidAt === 'string' ? new Date(paidAt).getTime() : paidAt.getTime()
+  return new Date(paidMs + getPaidCallWindowMs(durationMinutes))
+}
 
 /** Carência após o fim de uma chamada agendada (fluxo legado 'confirmed'). */
 export const LEGACY_CALL_GRACE_MS = 5 * 60 * 1000

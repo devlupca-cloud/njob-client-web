@@ -8,7 +8,7 @@ import { useAuthStore } from '@/store/authStore'
 import { useToast } from '@/components/ui/Toast'
 import { generateToken, ZegoUIKitPrebuilt } from '@/lib/zegocloud'
 import { observeZegoTranslation } from '@/lib/zegoI18n'
-import { POST_PAID_CALL_WINDOW_MS, LEGACY_CALL_GRACE_MS } from '@/lib/timeWindows'
+import { getPaidCallEnd, LEGACY_CALL_GRACE_MS } from '@/lib/timeWindows'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -61,8 +61,8 @@ function getCallWindow(call: CallInfo): CallWindow {
   }
 
   if (call.status === 'paid' && call.paid_at) {
-    const paidAt = new Date(call.paid_at).getTime()
-    if (Date.now() > paidAt + POST_PAID_CALL_WINDOW_MS) return 'ended'
+    const windowEnd = getPaidCallEnd(call.paid_at, call.scheduled_duration_minutes).getTime()
+    if (Date.now() > windowEnd) return 'ended'
     return 'open'
   }
 

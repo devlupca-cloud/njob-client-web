@@ -15,7 +15,7 @@ import {
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils'
-import { POST_PAID_CALL_WINDOW_MS } from '@/lib/timeWindows'
+import { getPaidCallEnd } from '@/lib/timeWindows'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -388,9 +388,11 @@ function CallList({ calls, now, onTap }: { calls: CallPurchase[]; now: Date; onT
           : null
 
         const paidAt = call.paid_at ? new Date(call.paid_at) : null
-        const paidWindowEnd = paidAt
-          ? new Date(paidAt.getTime() + POST_PAID_CALL_WINDOW_MS)
-          : null
+        // Janela = duração comprada. Pagou 30 min, tem 30 min pra entrar.
+        const paidWindowEnd =
+          paidAt && call.scheduled_duration_minutes
+            ? getPaidCallEnd(paidAt, call.scheduled_duration_minutes)
+            : null
 
         // canEnter:
         //  - paid + dentro de 2h após pagamento
@@ -439,7 +441,7 @@ function CallList({ calls, now, onTap }: { calls: CallPurchase[]; now: Date; onT
                 {creator?.full_name ?? 'Creator'}
               </p>
               <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
-                Compra: {formatDate(call.created_at)}
+                Compra: {formatDateTime(call.paid_at ?? call.created_at)}
               </p>
               {startTime && endTime && (
                 <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
@@ -472,6 +474,11 @@ function CallList({ calls, now, onTap }: { calls: CallPurchase[]; now: Date; onT
                 <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full mt-1 text-green-400 bg-green-500/10">
                   <Clock size={10} />
                   {t('purchases.readyToJoin')}
+                  {isPaidFlow && paidWindowEnd && countdownText(now, paidWindowEnd) && (
+                    <span className="ml-0.5 opacity-90">
+                      · {countdownText(now, paidWindowEnd)}
+                    </span>
+                  )}
                 </span>
               )}
               {!isExpired && !isTooEarly && !canEnter && (

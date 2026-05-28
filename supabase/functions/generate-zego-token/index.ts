@@ -14,7 +14,10 @@ const supabaseAdmin = createClient(
 );
 
 // Janela pós-pagamento para o novo fluxo (sem horário agendado).
-const POST_PAID_WINDOW_MS = 2 * 60 * 60 * 1000; // 2 horas
+// Janela = duração comprada. Se pagou 30 min, tem 30 min pra entrar.
+// Mantém em sincronia com getPaidCallWindowMs() do client (timeWindows.ts)
+// e PAID_CALL_WINDOW_MS do creator_web (call-windows.ts).
+const getPaidWindowMs = (durationMinutes: number): number => durationMinutes * 60 * 1000;
 const LEGACY_GRACE_MS = 5 * 60 * 1000;           // 5 minutos depois do fim
 
 /**
@@ -175,7 +178,8 @@ serve(async (req) => {
       }
       if (callRow.status === "paid") {
         const paidAt = callRow.paid_at ? new Date(callRow.paid_at).getTime() : NaN;
-        if (!isFinite(paidAt) || now > paidAt + POST_PAID_WINDOW_MS) {
+        const durationMin = callRow.scheduled_duration_minutes ?? 30;
+        if (!isFinite(paidAt) || now > paidAt + getPaidWindowMs(durationMin)) {
           return new Response(
             JSON.stringify({ success: false, error: "Janela de entrada expirada" }),
             { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
