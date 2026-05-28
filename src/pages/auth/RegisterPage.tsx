@@ -82,19 +82,31 @@ export default function RegisterPage() {
       })
       navigate('/home', { replace: true })
     } catch (err: unknown) {
-      const message =
+      const rawMessage =
         err instanceof Error ? err.message : t('auth.register.genericError')
+      const low = rawMessage.toLowerCase()
 
       if (
-        message.toLowerCase().includes('already registered') ||
-        message.toLowerCase().includes('already exists') ||
-        message.toLowerCase().includes('email')
+        low.includes('already registered') ||
+        low.includes('already exists') ||
+        low.includes('user already')
       ) {
-        // Exibe o modal amigável em vez de apenas o erro inline
         setShowEmailExistsModal(true)
         setServerError(t('auth.register.emailAlreadyUsed'))
+      } else if (low.includes('password') && (low.includes('weak') || low.includes('characters') || low.includes('require'))) {
+        // Supabase devolve "Password should be at least 12 characters" / weak
+        // password — traduz pra mensagem que já existe nas locales.
+        setServerError(t('auth.register.passwordMinLength'))
+      } else if (low.includes('rate limit') || low.includes('too many')) {
+        setServerError('Muitas tentativas. Tente novamente em alguns minutos.')
+      } else if (low.includes('email') && low.includes('invalid')) {
+        setServerError(t('auth.register.emailInvalid'))
+      } else if (low.includes('network') || low.includes('fetch')) {
+        setServerError('Sem conexão. Verifique sua internet e tente de novo.')
       } else {
-        setServerError(message)
+        // Sempre tradução genérica em pt — nunca expor a string crua do Supabase.
+        setServerError(t('auth.register.genericError'))
+        console.error('[register] erro não mapeado:', rawMessage)
       }
     }
   }
