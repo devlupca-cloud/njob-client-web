@@ -189,7 +189,7 @@
     "avatarSuccess": "Foto de perfil actualizada",
     "avatarError": "No fue posible actualizar la foto. Inténtalo de nuevo.",
     "avatarTooLarge": "Imagen demasiado grande. Usa una foto de hasta 5 MB.",
-    "avatarInvalidType": "Formato inválido. Usa JPG, PNG, WEBP o GIF.",
+    "avatarInvalidType": "Formato inválido. Selecciona una imagen.",
     "logout": "Cerrar sesión",
     "personalInfo": "Información personal",
     "subscription": "Suscripción",

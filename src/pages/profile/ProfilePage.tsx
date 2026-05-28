@@ -16,7 +16,6 @@ import { useTranslation } from 'react-i18next'
 import { useToast } from '@/components/ui/Toast'
 
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024
-const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 
 interface NavSection {
   icon: React.ElementType
@@ -63,7 +62,7 @@ export default function ProfilePage() {
     const file = e.target.files?.[0]
     if (!file || !user?.id) return
 
-    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+    if (file.type && !file.type.startsWith('image/')) {
       toast({ type: 'error', title: t('profile.avatarInvalidType') })
       if (fileInputRef.current) fileInputRef.current.value = ''
       return
