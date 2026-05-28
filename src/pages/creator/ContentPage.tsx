@@ -70,9 +70,12 @@ async function fetchCreatorContent(
       .select('full_name, username')
       .eq('id', profileId)
       .single(),
+    // vw_packs_listing dá o count correto mesmo sem ter comprado. pack_items
+    // vai numa query separada (abaixo) — a RLS estrita devolve [] para packs
+    // não comprados, o front mantém o pack visível como "trancado".
     supabase
-      .from('packs')
-      .select('id, title, price, cover_image_url, stripe_price_id, pack_items(*)')
+      .from('vw_packs_listing')
+      .select('id, title, price, cover_image_url, stripe_price_id, items_count')
       .eq('profile_id', profileId)
       .order('created_at', { ascending: false }),
     supabase
@@ -98,6 +101,23 @@ async function fetchCreatorContent(
     (purchasesRes.data ?? []).map((p: any) => p.pack_id)
   )
 
+  // Pack items numa query separada — RLS estrita devolve [] para os packs
+  // que o user ainda não comprou (sem expor file_url). Os comprados (e os
+  // que o user é dono via creator_id) voltam normais.
+  const packIds = (packsRes.data ?? []).map((p: any) => p.id) as string[]
+  const itemsByPack = new Map<string, Array<{ id: string; pack_id: string; item_type: string; file_url: string; thumbnail_url: string | null; file_name: string | null }>>()
+  if (packIds.length > 0) {
+    const { data: itemsRows } = await supabase
+      .from('pack_items')
+      .select('id, pack_id, item_type, file_url, thumbnail_url, file_name')
+      .in('pack_id', packIds)
+    for (const it of (itemsRows ?? []) as any[]) {
+      const arr = itemsByPack.get(it.pack_id) ?? []
+      arr.push(it)
+      itemsByPack.set(it.pack_id, arr)
+    }
+  }
+
   const mapType = (t: string): 'image' | 'video' | 'audio' => {
     if (t === 'photo') return 'image'
     if (t === 'video') return 'video'
@@ -105,14 +125,15 @@ async function fetchCreatorContent(
   }
 
   const packs: PackCard[] = (packsRes.data ?? []).map((p: any) => {
-    const rawItems = p.pack_items ?? []
+    const rawItems = itemsByPack.get(p.id) ?? []
     const isPurchased = purchasedIds.has(p.id)
     return {
       id: p.id,
       title: p.title,
       price: p.price,
       cover_url: p.cover_image_url ?? null,
-      items_count: rawItems.length,
+      // items_count vem do view (count autoritativo, mesmo sem ter comprado).
+      items_count: p.items_count ?? rawItems.length,
       stripe_price_id: p.stripe_price_id ?? null,
       creator_id: profileId,
       is_purchased: isPurchased,

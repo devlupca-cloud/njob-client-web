@@ -90,7 +90,7 @@ interface GetCreatorDetailsRPCResult {
   proxima_live: GetCreatorDetailsProximaLive | null
 }
 
-/** Linha retornada pela query de packs (com pack_items joinado) */
+/** Linha retornada pela view vw_packs_listing (count seguro sem expor file_url) */
 interface PackRPCRow {
   id: string
   title: string
@@ -98,7 +98,7 @@ interface PackRPCRow {
   price: number
   cover_image_url: string | null
   stripe_price_id: string | null
-  pack_items: { id: string }[] | null
+  items_count: number | null
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -120,9 +120,11 @@ async function fetchCreatorProfile(
       p_profile_id: profileId,
       p_client_id: userId ?? '00000000-0000-0000-0000-000000000000',
     }),
+    // vw_packs_listing: count seguro sem expor file_url (pack_items agora
+    // tem RLS estrita — só owner/buyer veem itens).
     supabase
-      .from('packs')
-      .select('id, title, description, price, cover_image_url, stripe_price_id, pack_items(id)')
+      .from('vw_packs_listing')
+      .select('id, title, description, price, cover_image_url, stripe_price_id, items_count')
       .eq('profile_id', profileId)
       .order('created_at', { ascending: false }),
     supabase
@@ -190,7 +192,7 @@ async function fetchCreatorProfile(
     title: p.title,
     price: p.price,
     cover_url: p.cover_image_url ?? null,
-    items_count: p.pack_items?.length ?? 0,
+    items_count: p.items_count ?? 0,
     stripe_price_id: p.stripe_price_id ?? null,
     creator_id: profileId,
     purchased: purchasedPackIds.has(p.id),
