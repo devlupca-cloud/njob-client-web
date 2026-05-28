@@ -193,6 +193,25 @@ export default function BookingCallModal({
       onClose()
       return
     }
+    // Refetch antes de cancelar para evitar cancelar uma call que acabou
+    // de ser paga (race: cliente volta do Stripe success_url, modal ainda
+    // está com state local 'awaiting_payment', cliente aperta ESC/clica fora
+    // e cancelaria uma call já paga). Se o status mudou pra paid/confirmed/
+    // completed, só fecha o modal.
+    const { data: latest } = await supabase
+      .from('one_on_one_calls')
+      .select('status')
+      .eq('id', callId)
+      .maybeSingle()
+    const latestStatus = (latest as { status?: string } | null)?.status
+    if (
+      latestStatus === 'paid' ||
+      latestStatus === 'confirmed' ||
+      latestStatus === 'completed'
+    ) {
+      onClose()
+      return
+    }
     await supabase
       .from('one_on_one_calls')
       .update({ status: 'cancelled_by_user' })

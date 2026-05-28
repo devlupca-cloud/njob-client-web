@@ -191,8 +191,31 @@ export default function CallRoomPage() {
       console.error('Error joining call room:', err)
     })
 
+    // Realtime: se o OUTRO lado encerrar (status='completed'), saio também.
+    // Sem isso o cliente fica preso na sala quando o creator sai (token Zego
+    // vale 2h, então a sala não cai sozinha).
+    const channel = supabase
+      .channel(`call-room:${call!.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'one_on_one_calls',
+          filter: `id=eq.${call!.id}`,
+        },
+        (payload) => {
+          const next = (payload.new ?? null) as { status?: string } | null
+          if (next?.status === 'completed' || next?.status === 'cancelled_by_creator' || next?.status === 'cancelled_by_user') {
+            endCall()
+          }
+        },
+      )
+      .subscribe()
+
     return () => {
       cancelled = true
+      void supabase.removeChannel(channel)
       if (timerRef.current) {
         clearInterval(timerRef.current)
         timerRef.current = null

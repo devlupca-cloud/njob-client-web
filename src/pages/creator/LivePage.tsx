@@ -37,7 +37,7 @@ export default function LivePage() {
   const { profile, user } = useAuthStore()
   const { toast } = useToast()
   const { i18n } = useTranslation()
-  const [status, setStatus] = useState<'loading' | 'no-ticket' | 'joined' | 'error'>('loading')
+  const [status, setStatus] = useState<'loading' | 'no-ticket' | 'not-started' | 'ended' | 'joined' | 'error'>('loading')
   const containerRef = useRef<HTMLDivElement>(null)
   const zegoRef = useRef<InstanceType<typeof ZegoUIKitPrebuilt> | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -82,6 +82,19 @@ export default function LivePage() {
     }
 
     async function joinLive() {
+      // Gate de status: só entra se a live está realmente AO VIVO. Em
+      // scheduled o host ainda nem entrou — espectador ficaria preso em
+      // sala vazia. Em finished/cancelled a sala não existe mais.
+      const liveStatus = (live as unknown as { status?: string }).status
+      if (liveStatus === 'finished' || liveStatus === 'cancelled') {
+        setStatus('ended')
+        return
+      }
+      if (liveStatus !== 'live') {
+        setStatus('not-started')
+        return
+      }
+
       const isFree = !live!.ticket_price
 
       // Verifica ingresso se for paga
@@ -161,6 +174,55 @@ export default function LivePage() {
 
   return (
     <>
+      {/* Not-started overlay — live ainda não começou */}
+      {status === 'not-started' && (
+        <div className="fixed inset-0 z-[60] bg-[hsl(var(--background))] flex flex-col min-h-screen">
+          <Header onBack={() => navigate(-1)} />
+          <main className="flex-1 flex items-center justify-center px-8">
+            <div className="text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-amber-500/10 flex items-center justify-center">
+                <Radio size={28} className="text-amber-500" />
+              </div>
+              <p className="text-sm font-medium text-[hsl(var(--foreground))]">
+                A live ainda não começou
+              </p>
+              <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
+                Aguarde o creator iniciar a transmissão.
+              </p>
+              <button
+                onClick={() => navigate(-1)}
+                className="mt-6 px-6 py-2.5 rounded-xl bg-[hsl(var(--primary))] text-white text-sm font-semibold hover:opacity-90 active:scale-[0.98] transition-all"
+              >
+                Voltar ao perfil
+              </button>
+            </div>
+          </main>
+        </div>
+      )}
+
+      {/* Ended overlay — live já encerrou */}
+      {status === 'ended' && (
+        <div className="fixed inset-0 z-[60] bg-[hsl(var(--background))] flex flex-col min-h-screen">
+          <Header onBack={() => navigate(-1)} />
+          <main className="flex-1 flex items-center justify-center px-8">
+            <div className="text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-[hsl(var(--muted))]/20 flex items-center justify-center">
+                <Radio size={28} className="text-[hsl(var(--muted-foreground))]" />
+              </div>
+              <p className="text-sm font-medium text-[hsl(var(--foreground))]">
+                Esta live já encerrou
+              </p>
+              <button
+                onClick={() => navigate(-1)}
+                className="mt-6 px-6 py-2.5 rounded-xl bg-[hsl(var(--primary))] text-white text-sm font-semibold hover:opacity-90 active:scale-[0.98] transition-all"
+              >
+                Voltar ao perfil
+              </button>
+            </div>
+          </main>
+        </div>
+      )}
+
       {/* No-ticket overlay */}
       {status === 'no-ticket' && (
         <div className="fixed inset-0 z-[60] bg-[hsl(var(--background))] flex flex-col min-h-screen">
