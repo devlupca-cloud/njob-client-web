@@ -62,10 +62,17 @@ serve(async (req) => {
     // 3) Verificar status da conta no Stripe
     const account = await stripe.accounts.retrieve(stripeAccountId);
 
-    // Status baseia-se em charges_enabled, pois so quando charges_enabled=true
-    // a conta pode receber pagamentos. VERIFYING = onboarding concluido mas
-    // Stripe ainda verificando a conta.
-    const newStatus = account.charges_enabled
+    // Status COMPLETED exige charges_enabled E payouts_enabled — só então a
+    // conta efetivamente recebe pagamentos. details_submitted=true sem
+    // charges_enabled significa que Stripe ainda está verificando OU rejeitou
+    // (vide requirements.disabled_reason). Se houver disabled_reason, fica
+    // VERIFYING/REJECTED no front, nunca COMPLETED.
+    const disabledReason = account.requirements?.disabled_reason || null;
+    const pastDue = account.requirements?.past_due || [];
+    const currentlyDue = account.requirements?.currently_due || [];
+    const fullyEnabled = account.charges_enabled && account.payouts_enabled;
+
+    const newStatus = fullyEnabled
       ? "COMPLETED"
       : account.details_submitted
         ? "VERIFYING"
@@ -79,35 +86,51 @@ serve(async (req) => {
           charges_enabled: account.charges_enabled,
           payouts_enabled: account.payouts_enabled,
           details_submitted: account.details_submitted,
+          disabled_reason: disabledReason,
+          past_due: pastDue,
+          currently_due: currentlyDue,
           last_synced_at: new Date().toISOString(),
         },
       })
       .eq("creator_id", userId);
 
     // 4) Gerar link apropriado
+    if (fullyEnabled) {
+      // Conta totalmente verificada: gerar login link para Express Dashboard
+      const loginLink = await stripe.accounts.createLoginLink(stripeAccountId);
+      return new Response(
+        JSON.stringify({ url: loginLink.url, login_url: loginLink.url, status: "COMPLETED" }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        },
+      );
+    }
+
     if (account.details_submitted) {
-      if (account.charges_enabled) {
-        // Conta totalmente verificada: gerar login link para Express Dashboard
-        const loginLink = await stripe.accounts.createLoginLink(stripeAccountId);
-        return new Response(
-          JSON.stringify({ url: loginLink.url, login_url: loginLink.url, status: "COMPLETED" }),
-          {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-            status: 200,
-          },
-        );
-      }
-      // Onboarding concluido, aguardando verificacao do Stripe
-      const disabledReason = account.requirements?.disabled_reason || null;
-      const pastDue = account.requirements?.past_due || [];
-      const currentlyDue = account.requirements?.currently_due || [];
+      // Onboarding concluido. Pode estar em verificacao (sem disabled_reason)
+      // OU rejeitado/com pendencias (com disabled_reason ou past_due). Em
+      // ambos os casos devolvemos tambem um account_link para o creator poder
+      // reabrir o onboarding e completar/corrigir os campos.
+      const accountLink = await stripe.accountLinks.create({
+        account: stripeAccountId,
+        refresh_url: "https://creator.njob.com.br/stripe-setup",
+        return_url: "https://creator.njob.com.br/stripe-setup",
+        type: "account_onboarding",
+      });
       return new Response(
         JSON.stringify({
-          status: "VERIFYING",
-          message: "Sua conta está em verificação pelo Stripe. Isso pode levar alguns minutos.",
+          status: disabledReason || pastDue.length > 0 ? "REJECTED" : "VERIFYING",
+          message: disabledReason
+            ? "O Stripe identificou pendências na sua conta. Reabra o cadastro para corrigir."
+            : "Sua conta está em verificação pelo Stripe. Isso pode levar alguns minutos.",
           disabled_reason: disabledReason,
           past_due: pastDue,
           currently_due: currentlyDue,
+          charges_enabled: account.charges_enabled,
+          payouts_enabled: account.payouts_enabled,
+          onboarding_url: accountLink.url,
+          url: accountLink.url,
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },

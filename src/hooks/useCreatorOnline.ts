@@ -49,10 +49,21 @@ export function useCreatorOnline(creatorId: string | null | undefined) {
           setOnline(Boolean(row?.online))
         },
       )
-      .subscribe()
+      .subscribe((status) => {
+        if (status !== 'SUBSCRIBED') {
+          console.warn(`[creator-online] ${creatorId}:`, status)
+        }
+      })
+
+    // Polling de segurança (3s) caso Realtime atrase/falhe. Garante que o
+    // botão "Solicitar videochamada" apareça/suma em até 3s do toggle do creator.
+    const pollId = window.setInterval(() => {
+      void fetchInitial()
+    }, 3000)
 
     return () => {
       cancelled = true
+      window.clearInterval(pollId)
       void supabase.removeChannel(channel)
     }
   }, [creatorId])

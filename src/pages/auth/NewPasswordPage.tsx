@@ -13,9 +13,9 @@ function PasswordStrengthBar({ password }: { password: string }) {
   const getStrength = (pw: string): { level: number; label: string; color: string } => {
     if (!pw) return { level: 0, label: '', color: '' }
     let score = 0
-    if (pw.length >= 6) score++
-    if (pw.length >= 10) score++
-    if (/[A-Z]/.test(pw)) score++
+    if (pw.length >= 12) score++
+    if (pw.length >= 16) score++
+    if (/[a-z]/.test(pw) && /[A-Z]/.test(pw)) score++
     if (/[0-9]/.test(pw)) score++
     if (/[^A-Za-z0-9]/.test(pw)) score++
 
@@ -57,8 +57,9 @@ export default function NewPasswordPage() {
       newPassword: z
         .string()
         .min(1, t('auth.newPassword.passwordRequired'))
-        .min(6, t('auth.newPassword.passwordMinLength'))
-        .regex(/[A-Za-z]/, t('auth.newPassword.passwordNeedLetter'))
+        .min(12, t('auth.newPassword.passwordMinLength'))
+        .regex(/[a-z]/, t('auth.newPassword.passwordNeedLowercase'))
+        .regex(/[A-Z]/, t('auth.newPassword.passwordNeedUppercase'))
         .regex(/[0-9]/, t('auth.newPassword.passwordNeedNumber')),
       confirmPassword: z
         .string()
@@ -160,8 +161,9 @@ export default function NewPasswordPage() {
             </p>
             <ul className="flex flex-col gap-1">
               {[
-                { label: t('auth.newPassword.reqMinChars'), met: newPasswordValue.length >= 6 },
-                { label: t('auth.newPassword.reqLetter'), met: /[A-Za-z]/.test(newPasswordValue) },
+                { label: t('auth.newPassword.reqMinChars'), met: newPasswordValue.length >= 12 },
+                { label: t('auth.newPassword.reqLowercase'), met: /[a-z]/.test(newPasswordValue) },
+                { label: t('auth.newPassword.reqUppercase'), met: /[A-Z]/.test(newPasswordValue) },
                 { label: t('auth.newPassword.reqNumber'), met: /[0-9]/.test(newPasswordValue) },
               ].map(({ label, met }) => (
                 <li key={label} className="flex items-center gap-2">

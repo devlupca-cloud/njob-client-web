@@ -50,7 +50,10 @@ serve(async (req) => {
       case "account.updated": {
         const account: any = event.data.object;
         if (connectedAccountId) {
-          const payoutWebhookStatus = account.charges_enabled
+          // COMPLETED só com charges_enabled E payouts_enabled — alinha com
+          // create-stripe-connected-account e creator-payout-update-link.
+          const fullyEnabled = account.charges_enabled && account.payouts_enabled;
+          const payoutWebhookStatus = fullyEnabled
             ? "COMPLETED"
             : account.details_submitted
               ? "VERIFYING"
@@ -64,6 +67,9 @@ serve(async (req) => {
                 charges_enabled: account.charges_enabled ?? false,
                 payouts_enabled: account.payouts_enabled ?? false,
                 details_submitted: account.details_submitted ?? false,
+                disabled_reason: account.requirements?.disabled_reason || null,
+                past_due: account.requirements?.past_due || [],
+                currently_due: account.requirements?.currently_due || [],
                 last_synced_at: new Date().toISOString(),
               },
             })

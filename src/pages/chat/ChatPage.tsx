@@ -245,6 +245,10 @@ export default function ChatPage() {
       return rows
     },
     enabled: !!conversationId,
+    // Fallback contra Realtime quebrado: refaz a query a cada 4s para garantir
+    // que mensagens do outro lado apareçam mesmo se postgres_changes não chegar.
+    refetchInterval: 4000,
+    refetchIntervalInBackground: false,
   })
 
   // ── Scroll to bottom ────────────────────────────────────────────────────────
@@ -348,7 +352,11 @@ export default function ChatPage() {
           }
         }
       )
-      .subscribe()
+      .subscribe((status) => {
+        if (status !== 'SUBSCRIBED') {
+          console.warn(`[chat-realtime] ${conversationId}:`, status)
+        }
+      })
 
     return () => {
       supabase.removeChannel(channel)
@@ -383,18 +391,52 @@ export default function ChatPage() {
     setInputText('')
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
 
-    const { error } = await supabase.from('messages').insert({
-      conversation_id: conversationId,
-      sender_id: user.id,
-      content: text,
-    })
+    const { data, error } = await supabase
+      .from('messages')
+      .insert({
+        conversation_id: conversationId,
+        sender_id: user.id,
+        content: text,
+      })
+      .select('id, conversation_id, sender_id, content, created_at')
+      .single()
 
     setIsSending(false)
 
-    if (error) {
+    if (error || !data) {
       console.error('Erro ao enviar mensagem:', error)
       setInputText(text)
+      return
     }
+
+    // Optimistic update: o remetente vê a própria mensagem na hora, sem depender
+    // de Realtime. A subscription cuida das mensagens do outro lado.
+    const raw = data as RawMessage
+    const optimistic: VwMessage = {
+      message_id: raw.id,
+      conversation_id: raw.conversation_id,
+      sender_id: raw.sender_id,
+      sender_name: null,
+      sender_avatar_url: null,
+      content: raw.content,
+      created_at: raw.created_at,
+      client_id: null,
+      client_name: null,
+      client_avatar_url: null,
+      client_last_read_at: null,
+      creator_id: null,
+      creator_name: null,
+      creator_avatar_url: null,
+      creator_last_read_at: null,
+      is_read_by_client: false,
+      is_read_by_creator: false,
+    }
+    setMessages((prev) => {
+      if (prev.some((m) => m.message_id === raw.id)) return prev
+      return [...prev, optimistic]
+    })
+    scrollToBottom()
+    queryClient.invalidateQueries({ queryKey: ['vw_creator_conversations'] })
   }
 
   // ── Peer info (from location state or first message) ────────────────────────

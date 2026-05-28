@@ -65,7 +65,10 @@ export default function ChangePasswordPage() {
         .min(1, t('profile.changePassword.currentRequired')),
       newPassword: z
         .string()
-        .min(6, t('profile.changePassword.newMinLength')),
+        .min(12, t('profile.changePassword.newMinLength'))
+        .regex(/[a-z]/, t('auth.register.passwordNeedLowercase'))
+        .regex(/[A-Z]/, t('auth.register.passwordNeedUppercase'))
+        .regex(/[0-9]/, t('auth.register.passwordNeedNumber')),
       confirmPassword: z
         .string()
         .min(1, t('profile.changePassword.confirmRequired')),

@@ -212,7 +212,10 @@ function RegisterForm({
       password: z
         .string()
         .min(1, t('auth.register.passwordRequired'))
-        .min(6, t('auth.register.passwordMinLength')),
+        .min(12, t('auth.register.passwordMinLength'))
+        .regex(/[a-z]/, t('auth.register.passwordNeedLowercase'))
+        .regex(/[A-Z]/, t('auth.register.passwordNeedUppercase'))
+        .regex(/[0-9]/, t('auth.register.passwordNeedNumber')),
       confirmPassword: z
         .string()
         .min(1, t('auth.register.confirmPasswordRequired')),

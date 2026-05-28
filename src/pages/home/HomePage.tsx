@@ -294,6 +294,10 @@ export default function HomePage() {
     queryFn: () => fetchCreators(activeFilter, deferredSearch, currentUser?.id),
     placeholderData: keepPreviousData,
     staleTime: 0,
+    // Fallback contra Realtime quebrado: refaz a lista a cada 5s para que
+    // online/offline e "ao vivo" reflitam mesmo sem postgres_changes.
+    refetchInterval: 5000,
+    refetchIntervalInBackground: false,
   })
 
   // Overlay de presença em tempo real: creator_presence.online muda quando o
@@ -315,7 +319,11 @@ export default function HomePage() {
           setPresenceOverlay((prev) => ({ ...prev, [row.creator_id as string]: Boolean(row.online) }))
         },
       )
-      .subscribe()
+      .subscribe((status) => {
+        if (status !== 'SUBSCRIBED') {
+          console.warn('[home-creator-presence]', status)
+        }
+      })
 
     return () => {
       void supabase.removeChannel(channel)
@@ -335,7 +343,11 @@ export default function HomePage() {
           void queryClient.invalidateQueries({ queryKey: ['creators'] })
         },
       )
-      .subscribe()
+      .subscribe((status) => {
+        if (status !== 'SUBSCRIBED') {
+          console.warn('[home-live-streams]', status)
+        }
+      })
 
     return () => {
       void supabase.removeChannel(channel)

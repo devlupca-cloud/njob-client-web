@@ -91,10 +91,10 @@ serve(async (req) => {
     const account = await stripe.accounts.retrieve(stripeAccountId);
 
     if (account.details_submitted) {
-      // Onboarding ja foi concluido — atualizar status no banco
-      const connStatus = account.charges_enabled
-        ? "COMPLETED"
-        : "VERIFYING";
+      // Onboarding ja foi concluido. COMPLETED só com charges_enabled E
+      // payouts_enabled — sem ambos a conta nao recebe nem repassa pagamento.
+      const fullyEnabled = account.charges_enabled && account.payouts_enabled;
+      const connStatus = fullyEnabled ? "COMPLETED" : "VERIFYING";
       await supabaseAdmin
         .from("creator_payout_info")
         .update({
@@ -104,13 +104,16 @@ serve(async (req) => {
             charges_enabled: account.charges_enabled,
             payouts_enabled: account.payouts_enabled,
             details_submitted: true,
+            disabled_reason: account.requirements?.disabled_reason || null,
+            past_due: account.requirements?.past_due || [],
+            currently_due: account.requirements?.currently_due || [],
             last_synced_at: new Date().toISOString(),
           },
         })
         .eq("creator_id", userId);
 
       return new Response(
-        JSON.stringify({ completed: account.charges_enabled }),
+        JSON.stringify({ completed: fullyEnabled }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 200,

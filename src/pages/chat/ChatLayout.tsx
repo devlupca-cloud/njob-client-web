@@ -109,6 +109,10 @@ export default function ChatLayout() {
       })
     },
     enabled: !!user?.id,
+    // Fallback contra Realtime quebrado: refaz a lista a cada 5s para que a
+    // última mensagem / unread_count atualizem mesmo sem postgres_changes.
+    refetchInterval: 5000,
+    refetchIntervalInBackground: false,
   })
 
   // Realtime: nova mensagem de outra pessoa → atualiza a lista
@@ -121,7 +125,11 @@ export default function ChatLayout() {
         { event: 'INSERT', schema: 'public', table: 'messages', filter: `sender_id=neq.${user.id}` },
         () => queryClient.invalidateQueries({ queryKey: ['vw_creator_conversations', user.id] }),
       )
-      .subscribe()
+      .subscribe((status) => {
+        if (status !== 'SUBSCRIBED') {
+          console.warn('[conversations-realtime]', status)
+        }
+      })
     return () => {
       supabase.removeChannel(channel)
     }
