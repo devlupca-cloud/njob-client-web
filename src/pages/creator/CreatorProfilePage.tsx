@@ -90,12 +90,13 @@ interface GetCreatorDetailsRPCResult {
   proxima_live: GetCreatorDetailsProximaLive | null
 }
 
-/** Linha retornada pela view vw_packs_listing (count seguro sem expor file_url) */
+/** Linha retornada pela view vw_packs_listing (count seguro sem expor file_url).
+ *  PostgREST tipa colunas de views como nullable; filtramos em runtime. */
 interface PackRPCRow {
-  id: string
-  title: string
+  id: string | null
+  title: string | null
   description: string | null
-  price: number
+  price: number | null
   cover_image_url: string | null
   stripe_price_id: string | null
   items_count: number | null
@@ -187,16 +188,20 @@ async function fetchCreatorProfile(
     ((purchasedPacksRes.data ?? []) as { pack_id: string }[]).map((p) => p.pack_id),
   )
 
-  const packs: PackInfo[] = (packsRes.data ?? [] as PackRPCRow[]).map((p: PackRPCRow) => ({
-    id: p.id,
-    title: p.title,
-    price: p.price,
-    cover_url: p.cover_image_url ?? null,
-    items_count: p.items_count ?? 0,
-    stripe_price_id: p.stripe_price_id ?? null,
-    creator_id: profileId,
-    purchased: purchasedPackIds.has(p.id),
-  }))
+  const packs: PackInfo[] = ((packsRes.data ?? []) as PackRPCRow[])
+    .filter((p): p is PackRPCRow & { id: string; title: string; price: number } =>
+      typeof p.id === 'string' && typeof p.title === 'string' && typeof p.price === 'number',
+    )
+    .map((p) => ({
+      id: p.id,
+      title: p.title,
+      price: p.price,
+      cover_url: p.cover_image_url ?? null,
+      items_count: p.items_count ?? 0,
+      stripe_price_id: p.stripe_price_id ?? null,
+      creator_id: profileId,
+      purchased: purchasedPackIds.has(p.id),
+    }))
 
   const lives: LiveStream[] = (livesRes.data ?? []) as LiveStream[]
   const subscribersCount = subscribersRes.count ?? 0

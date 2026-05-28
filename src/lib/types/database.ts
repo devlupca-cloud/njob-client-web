@@ -1831,6 +1831,40 @@ export type Database = {
           },
         ]
       }
+      vw_packs_listing: {
+        Row: {
+          cover_image_url: string | null
+          created_at: string | null
+          currency: string | null
+          description: string | null
+          id: string | null
+          items_count: number | null
+          price: number | null
+          profile_id: string | null
+          published_at: string | null
+          status: Database["public"]["Enums"]["content_pack_status"] | null
+          stripe_price_id: string | null
+          stripe_product_id: string | null
+          title: string | null
+          updated_at: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "packs_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "packs_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "vw_creator_conversations"
+            referencedColumns: ["peer_id"]
+          },
+        ]
+      }
     }
     Functions: {
       book_availability_slot: { Args: { p_slot_id: string }; Returns: string }
