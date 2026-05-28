@@ -113,9 +113,12 @@ async function fetchPurchases(userId: string): Promise<PurchasesData> {
       supabase
         .from('one_on_one_calls')
         .select('*, profiles!creator_id(id, full_name, avatar_url)')
-
         .eq('user_id', userId)
-        .order('scheduled_start_time', { ascending: false })
+        // Esconde tentativas terminadas sem pagamento — só polui a lista.
+        // O cliente vê apenas chamadas ativas (requested/awaiting_payment/paid)
+        // ou concluídas (completed). Histórico bruto fica no DB pra auditoria.
+        .in('status', ['requested', 'awaiting_payment', 'paid', 'confirmed', 'completed'])
+        .order('created_at', { ascending: false })
         .limit(50)
     )
       .then((r) => r.data as CallPurchase[] | null)
