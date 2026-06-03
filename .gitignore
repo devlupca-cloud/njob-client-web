@@ -35,3 +35,7 @@ dist-ssr
 
 # Supabase CLI local state
 supabase/.temp/
+
+# Spurious Next.js artifacts (this app is Vite, not Next)
+.next/
+next-env.d.ts
