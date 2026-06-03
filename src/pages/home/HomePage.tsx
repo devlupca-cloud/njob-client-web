@@ -194,7 +194,7 @@ async function fetchCreators(
 
 function SkeletonGrid() {
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 px-4 pt-4">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 px-6 pt-4">
       {Array.from({ length: 6 }).map((_, i) => (
         <CardCreatorSkeleton key={i} />
       ))}
@@ -256,8 +256,8 @@ function FilterPill({
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <h2 className="text-base font-bold text-[hsl(var(--foreground))] px-4 mb-3">{title}</h2>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 px-4">
+      <h2 className="text-base font-bold text-[hsl(var(--foreground))] px-6 mb-3">{title}</h2>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 px-6">
         {children}
       </div>
     </div>
@@ -387,7 +387,7 @@ export default function HomePage() {
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-10 bg-[hsl(var(--background))] border-b border-[hsl(var(--border))]">
-        <div className="max-w-7xl mx-auto px-4 pt-4 pb-3 flex flex-col gap-3">
+        <div className="px-6 pt-4 pb-3 flex flex-col gap-3">
 
         {/* Logo */}
         <div className="flex items-center justify-between">
@@ -434,7 +434,7 @@ export default function HomePage() {
       </header>
 
       {/* ── Content ─────────────────────────────────────────────────────────── */}
-      <main className="flex-1 max-w-7xl mx-auto w-full">
+      <main className="flex-1 w-full">
 
         {/* Loading */}
         {isLoading && <SkeletonGrid />}
@@ -475,7 +475,7 @@ export default function HomePage() {
                 return list.length === 0 ? (
                   <EmptyState query={search} />
                 ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 p-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 p-6">
                     {list.map((creator) => (
                       <CardCreator key={creator.id} creator={creator} />
                     ))}
