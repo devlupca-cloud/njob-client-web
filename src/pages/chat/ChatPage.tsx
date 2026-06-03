@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useLocation, useNavigate } from 'react-router-dom'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Send, Check, CheckCheck } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
@@ -26,7 +26,13 @@ interface VwMessage {
   creator_last_read_at: string | null
   is_read_by_client: boolean | null
   is_read_by_creator: boolean | null
+  /** Coluna legada da view (sempre false) — o chat não tem mais paywall. */
+  is_locked: boolean | null
 }
+
+// Paginação estilo WhatsApp: carrega as N mensagens mais recentes e busca lotes
+// mais antigos conforme o usuário rola para o topo.
+const PAGE_SIZE = 30
 
 interface RawMessage {
   id: string
@@ -211,49 +217,41 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<VwMessage[]>([])
   const [inputText, setInputText] = useState('')
   const [isSending, setIsSending] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false)
+  const [hasMoreOlder, setHasMoreOlder] = useState(false)
 
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  // cleared_at do participante: mensagens anteriores à exclusão ficam ocultas.
+  const clearedAtRef = useRef<string | null>(null)
 
-  // ── Fetch messages via vw_messages ──────────────────────────────────────────
+  // ── Helpers de paginação ─────────────────────────────────────────────────────
 
-  const { isLoading } = useQuery({
-    queryKey: ['vw_messages', conversationId],
-    queryFn: async () => {
-      if (!conversationId) return []
-      // Meu cleared_at nesta conversa: oculta mensagens anteriores à exclusão.
-      let clearedAt: string | null = null
-      if (user?.id) {
-        const { data: part } = await supabase
-          .from('conversation_participants')
-          .select('cleared_at')
-          .eq('conversation_id', conversationId)
-          .eq('profile_id', user.id)
-          .maybeSingle()
-        clearedAt = (part as { cleared_at: string | null } | null)?.cleared_at ?? null
-      }
-      const { data, error } = await supabase
-        .from('vw_messages')
-        .select('*')
-        .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: false })
-        .limit(100)
+  // Mantém apenas mensagens posteriores ao meu cleared_at (exclusão estilo WhatsApp).
+  const applyClearedFilter = useCallback((rows: VwMessage[]): VwMessage[] => {
+    const c = clearedAtRef.current
+    if (!c) return rows
+    const clearedMs = new Date(c).getTime()
+    return rows.filter((m) => !!m.created_at && new Date(m.created_at).getTime() > clearedMs)
+  }, [])
 
-      if (error) throw error
-      let rows = ((data ?? []) as VwMessage[]).reverse()
-      if (clearedAt) {
-        const clearedMs = new Date(clearedAt).getTime()
-        rows = rows.filter((m) => !!m.created_at && new Date(m.created_at).getTime() > clearedMs)
-      }
-      setMessages(rows)
-      return rows
-    },
-    enabled: !!conversationId,
-    // Fallback contra Realtime quebrado: refaz a query a cada 4s para garantir
-    // que mensagens do outro lado apareçam mesmo se postgres_changes não chegar.
-    refetchInterval: 4000,
-    refetchIntervalInBackground: false,
-  })
+  // Mescla lotes (recentes, antigos, realtime) por message_id, mantendo ordem
+  // cronológica. Lotes novos sobrescrevem os antigos (atualiza recibos de leitura)
+  // e nada é descartado — preserva o histórico já carregado ao paginar.
+  const mergeRows = useCallback((incoming: VwMessage[]) => {
+    setMessages((prev) => {
+      const map = new Map<string, VwMessage>()
+      for (const m of prev) if (m.message_id) map.set(m.message_id, m)
+      for (const m of incoming) if (m.message_id) map.set(m.message_id, m)
+      return Array.from(map.values()).sort((a, b) => {
+        const ta = a.created_at ? new Date(a.created_at).getTime() : 0
+        const tb = b.created_at ? new Date(b.created_at).getTime() : 0
+        return ta - tb
+      })
+    })
+  }, [])
 
   // ── Scroll to bottom ────────────────────────────────────────────────────────
 
@@ -263,9 +261,128 @@ export default function ChatPage() {
     }, 80)
   }, [])
 
+  // Está perto do fim? (decide se auto-rola ao chegar mensagem nova)
+  const isNearBottom = useCallback((): boolean => {
+    const c = scrollRef.current
+    if (!c) return true
+    return c.scrollHeight - c.scrollTop - c.clientHeight < 120
+  }, [])
+
+  // ── Carga inicial (mensagens mais recentes) ──────────────────────────────────
+
   useEffect(() => {
-    if (messages.length > 0) scrollToBottom('auto')
-  }, [messages.length, scrollToBottom])
+    if (!conversationId) return
+    let active = true
+    ;(async () => {
+      setIsLoading(true)
+      setMessages([])
+      setHasMoreOlder(false)
+      // cleared_at primeiro, para o filtro valer já na carga inicial.
+      clearedAtRef.current = null
+      if (user?.id) {
+        const { data: part } = await supabase
+          .from('conversation_participants')
+          .select('cleared_at')
+          .eq('conversation_id', conversationId)
+          .eq('profile_id', user.id)
+          .maybeSingle()
+        if (!active) return
+        clearedAtRef.current = (part as { cleared_at: string | null } | null)?.cleared_at ?? null
+      }
+
+      let q = supabase
+        .from('vw_messages')
+        .select('*')
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: false })
+        .limit(PAGE_SIZE)
+      if (clearedAtRef.current) q = q.gt('created_at', clearedAtRef.current)
+      const { data, error } = await q
+      if (!active) return
+      if (!error) {
+        const rawDesc = (data ?? []) as VwMessage[]
+        setHasMoreOlder(rawDesc.length === PAGE_SIZE)
+        setMessages(rawDesc.slice().reverse())
+      }
+      setIsLoading(false)
+      scrollToBottom('auto')
+    })()
+    return () => {
+      active = false
+    }
+  }, [conversationId, user?.id, scrollToBottom])
+
+  // ── Carregar mensagens mais antigas (scroll para o topo) ─────────────────────
+
+  const loadOlder = useCallback(async () => {
+    if (!conversationId || isLoadingOlder || !hasMoreOlder) return
+    const oldest = messages[0]?.created_at
+    if (!oldest) return
+    setIsLoadingOlder(true)
+    const container = scrollRef.current
+    const prevHeight = container?.scrollHeight ?? 0
+    const prevTop = container?.scrollTop ?? 0
+
+    let q = supabase
+      .from('vw_messages')
+      .select('*')
+      .eq('conversation_id', conversationId)
+      .lt('created_at', oldest)
+      .order('created_at', { ascending: false })
+      .limit(PAGE_SIZE)
+    if (clearedAtRef.current) q = q.gt('created_at', clearedAtRef.current)
+    const { data, error } = await q
+
+    if (!error) {
+      const rawDesc = (data ?? []) as VwMessage[]
+      setHasMoreOlder(rawDesc.length === PAGE_SIZE)
+      if (rawDesc.length > 0) {
+        mergeRows(rawDesc)
+        // Preserva a posição de leitura ao prepender o lote antigo.
+        requestAnimationFrame(() => {
+          const c = scrollRef.current
+          if (c) c.scrollTop = c.scrollHeight - prevHeight + prevTop
+        })
+      }
+    }
+    setIsLoadingOlder(false)
+  }, [conversationId, isLoadingOlder, hasMoreOlder, messages, mergeRows])
+
+  const handleScroll = useCallback(() => {
+    const c = scrollRef.current
+    if (!c) return
+    if (c.scrollTop <= 60 && hasMoreOlder && !isLoadingOlder) {
+      void loadOlder()
+    }
+  }, [hasMoreOlder, isLoadingOlder, loadOlder])
+
+  // ── Sincroniza janela recente (poll + realtime) ──────────────────────────────
+  // Refaz só o lote recente da view (mascarada) e mescla: atualiza recibos de
+  // leitura e traz mensagens novas do outro lado sem descartar o histórico já
+  // carregado nem mexer no scroll quando o usuário está lendo mensagens antigas.
+  const syncRecent = useCallback(async () => {
+    if (!conversationId) return
+    let q = supabase
+      .from('vw_messages')
+      .select('*')
+      .eq('conversation_id', conversationId)
+      .order('created_at', { ascending: false })
+      .limit(PAGE_SIZE)
+    if (clearedAtRef.current) q = q.gt('created_at', clearedAtRef.current)
+    const { data, error } = await q
+    if (error) return
+    const rawDesc = (data ?? []) as VwMessage[]
+    mergeRows(applyClearedFilter(rawDesc.slice().reverse()))
+  }, [conversationId, mergeRows, applyClearedFilter])
+
+  // Fallback contra Realtime quebrado: sincroniza a janela recente a cada 4s.
+  useEffect(() => {
+    if (!conversationId) return
+    const id = setInterval(() => {
+      void syncRecent()
+    }, 4000)
+    return () => clearInterval(id)
+  }, [conversationId, syncRecent])
 
   // ── Mark messages as read ───────────────────────────────────────────────────
 
@@ -300,48 +417,13 @@ export default function ChatPage() {
         async (payload) => {
           const raw = payload.new as RawMessage
 
-          // Re-fetch from vw_messages to get all enriched fields for this message
-          const { data } = await supabase
-            .from('vw_messages')
-            .select('*')
-            .eq('message_id', raw.id)
-            .maybeSingle()
-
-          if (data) {
-            const enriched = data as VwMessage
-            setMessages((prev) => {
-              // Avoid duplicates
-              if (prev.some((m) => m.message_id === enriched.message_id)) return prev
-              return [...prev, enriched]
-            })
-            scrollToBottom()
-          } else {
-            // Fallback: build a minimal VwMessage from the raw INSERT payload
-            const fallback: VwMessage = {
-              message_id: raw.id,
-              conversation_id: raw.conversation_id,
-              sender_id: raw.sender_id,
-              sender_name: null,
-              sender_avatar_url: null,
-              content: raw.content,
-              created_at: raw.created_at,
-              client_id: null,
-              client_name: null,
-              client_avatar_url: null,
-              client_last_read_at: null,
-              creator_id: null,
-              creator_name: null,
-              creator_avatar_url: null,
-              creator_last_read_at: null,
-              is_read_by_client: false,
-              is_read_by_creator: false,
-            }
-            setMessages((prev) => {
-              if (prev.some((m) => m.message_id === fallback.message_id)) return prev
-              return [...prev, fallback]
-            })
-            scrollToBottom()
-          }
+          // Ressincronizamos a janela recente pela view vw_messages em vez de
+          // confiar no payload cru do Realtime (que não traz os campos derivados
+          // da view). Só auto-rola se o usuário já estava perto do fim, para não
+          // interromper a leitura de mensagens antigas.
+          const stick = isNearBottom() || raw.sender_id === user?.id
+          await syncRecent()
+          if (stick) scrollToBottom()
 
           // Mark as read when the incoming message is from someone else
           if (raw.sender_id !== user?.id) {
@@ -365,7 +447,7 @@ export default function ChatPage() {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [conversationId, user?.id, scrollToBottom, queryClient])
+  }, [conversationId, user?.id, scrollToBottom, queryClient, syncRecent, isNearBottom])
 
   // ── Auto-grow textarea ──────────────────────────────────────────────────────
 
@@ -434,6 +516,7 @@ export default function ChatPage() {
       creator_last_read_at: null,
       is_read_by_client: false,
       is_read_by_creator: false,
+      is_locked: false,
     }
     setMessages((prev) => {
       if (prev.some((m) => m.message_id === raw.id)) return prev
@@ -491,8 +574,18 @@ export default function ChatPage() {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto bg-[hsl(var(--card)/0.3)]">
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto bg-[hsl(var(--card)/0.3)]"
+      >
       <div className="max-w-3xl mx-auto px-4 py-3">
+        {/* Spinner de carregamento de mensagens antigas (scroll para o topo) */}
+        {isLoadingOlder && (
+          <div className="flex justify-center py-3">
+            <div className="w-5 h-5 border-2 border-[hsl(var(--muted-foreground))] border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
         {isLoading ? (
           /* Loading skeleton */
           <div className="flex flex-col gap-4">
