@@ -31,6 +31,26 @@ async function fetchProfileWithRetry(userId: string, retries = 3): Promise<Profi
 }
 
 /**
+ * Se a conta está pendente de exclusão (e ainda não foi anonimizada), o simples
+ * fato de logar cancela a exclusão. Retorna o profile já reativado.
+ */
+async function cancelPendingDeletion(
+  profile: Profile | null,
+  notify: (msg: string) => void,
+): Promise<Profile | null> {
+  if (!profile?.deletion_requested_at || profile.deleted_at) return profile
+  try {
+    const { error } = await supabase.rpc('fn_cancel_account_deletion')
+    if (error) throw error
+    notify('Exclusão de conta cancelada. Bem-vindo(a) de volta!')
+    return { ...profile, deletion_requested_at: null, is_active: true }
+  } catch (err) {
+    console.warn('[AuthProvider] falha ao cancelar exclusão pendente:', err)
+    return profile
+  }
+}
+
+/**
  * Resolves auth on mount using onAuthStateChange (INITIAL_SESSION event).
  * Guarantees that both session AND profile are fully loaded before
  * setting isLoading=false (which unblocks AuthGuard → page rendering).
@@ -58,7 +78,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
           store.setSession(session)
 
           if (session?.user) {
-            const profile = await fetchProfileWithRetry(session.user.id)
+            let profile = await fetchProfileWithRetry(session.user.id)
             if (mounted) {
               // Bloquear creators de logar no app do client
               if (profile?.role === 'creator') {
@@ -66,6 +86,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
                 await supabase.auth.signOut()
                 return
               }
+              profile = await cancelPendingDeletion(profile, (m) => toast({ title: m, type: 'success' }))
               useAuthStore.getState().setProfile(profile)
               if (!profile) {
                 useAuthStore.getState().setProfileError(true)
@@ -98,7 +119,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
           if (session?.user && !isSameUser) {
             // Real login (different user) — block UI until profile is ready
             store.setLoading(true)
-            const profile = await fetchProfileWithRetry(session.user.id)
+            let profile = await fetchProfileWithRetry(session.user.id)
             if (mounted) {
               // Bloquear creators de logar no app do client
               if (profile?.role === 'creator') {
@@ -106,6 +127,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
                 await supabase.auth.signOut()
                 return
               }
+              profile = await cancelPendingDeletion(profile, (m) => toast({ title: m, type: 'success' }))
               useAuthStore.getState().setProfile(profile)
               if (!profile) {
                 useAuthStore.getState().setProfileError(true)

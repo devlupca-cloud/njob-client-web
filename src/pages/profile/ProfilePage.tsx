@@ -8,12 +8,14 @@ import {
   LogOut,
   Camera,
   Loader2,
+  Trash2,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { useAuth } from '@/hooks/useAuth'
 import { useTranslation } from 'react-i18next'
 import { useToast } from '@/components/ui/Toast'
+import DeleteAccountModal from '@/components/modals/DeleteAccountModal'
 
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024
 
@@ -32,6 +34,8 @@ export default function ProfilePage() {
   const { toast } = useToast()
   const [uploading, setUploading] = useState(false)
   const [avatarError, setAvatarError] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const sections: NavSection[] = [
@@ -115,6 +119,24 @@ export default function ProfilePage() {
     signOut()
     useAuthStore.getState().setGuest(true)
     navigate('/home', { replace: true })
+  }
+
+  const handleDeleteAccount = async () => {
+    setDeleting(true)
+    try {
+      const { error } = await supabase.rpc('fn_request_account_deletion')
+      if (error) throw error
+      setDeleteOpen(false)
+      toast({ type: 'success', title: t('profile.deleteAccount.success') })
+      signOut()
+      useAuthStore.getState().setGuest(true)
+      navigate('/home', { replace: true })
+    } catch (err) {
+      const description = err instanceof Error ? err.message : undefined
+      toast({ type: 'error', title: t('profile.deleteAccount.error'), description })
+    } finally {
+      setDeleting(false)
+    }
   }
 
   const displayName = profile?.full_name ?? user?.email?.split('@')[0] ?? t('common.user')
@@ -222,6 +244,24 @@ export default function ProfilePage() {
           </button>
         </div>
       </div>
+
+      {/* Delete account button */}
+      <div className="px-4 mt-4 max-w-2xl mx-auto">
+        <button
+          onClick={() => setDeleteOpen(true)}
+          className="w-full flex items-center justify-center gap-2 px-4 h-12 rounded-2xl text-sm font-medium text-[hsl(var(--muted-foreground))] hover:text-red-500 transition-colors"
+        >
+          <Trash2 className="w-4 h-4 shrink-0" />
+          {t('profile.deleteAccount.menuLabel')}
+        </button>
+      </div>
+
+      <DeleteAccountModal
+        open={deleteOpen}
+        loading={deleting}
+        onConfirm={handleDeleteAccount}
+        onClose={() => setDeleteOpen(false)}
+      />
     </div>
   )
 }
