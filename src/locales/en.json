@@ -203,6 +203,16 @@
     "coupons": "Coupons",
     "financial": "Financial",
     "purchases": "Purchases",
+    "deleteAccount": {
+      "menuLabel": "Delete my account",
+      "title": "Delete your account?",
+      "body": "We're sorry to see you go. Once you confirm, your account will be deactivated and scheduled for deletion.",
+      "graceNote": "You have 30 days to change your mind: just log in again within that window and we'll cancel the deletion automatically. After 30 days without access, the account is permanently deleted.",
+      "confirm": "Delete account",
+      "cancel": "Cancel",
+      "success": "Your account is scheduled for deletion. Log in within 30 days to cancel.",
+      "error": "We couldn't process the deletion. Please try again."
+    },
     "personalInfoPage": {
       "title": "Personal information",
       "name": "Name",

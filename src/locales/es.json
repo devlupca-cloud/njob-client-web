@@ -197,6 +197,16 @@
     "coupons": "Cupones",
     "financial": "Financiero",
     "purchases": "Compras",
+    "deleteAccount": {
+      "menuLabel": "Eliminar mi cuenta",
+      "title": "¿Eliminar tu cuenta?",
+      "body": "Lamentamos verte partir. Al confirmar, tu cuenta se desactivará y quedará programada para eliminación.",
+      "graceNote": "Tienes 30 días para cambiar de opinión: solo vuelve a iniciar sesión dentro de ese plazo y cancelaremos la eliminación automáticamente. Pasados 30 días sin acceso, la cuenta se elimina de forma definitiva.",
+      "confirm": "Eliminar cuenta",
+      "cancel": "Cancelar",
+      "success": "Tu cuenta quedó programada para eliminación. Inicia sesión en 30 días para cancelar.",
+      "error": "No se pudo procesar la eliminación. Inténtalo de nuevo."
+    },
     "personalInfoPage": {
       "title": "Información personal",
       "name": "Nombre",
