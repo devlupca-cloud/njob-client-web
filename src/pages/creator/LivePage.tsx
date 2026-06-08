@@ -53,6 +53,11 @@ export default function LivePage() {
     queryKey: ['live-stream', id],
     queryFn: () => fetchLive(id!),
     enabled: !!id,
+    // Enquanto a live ainda não começou, refaz a consulta a cada 3s para
+    // detectar quando o host entra na sala (status vira 'live'). Sem isso, o
+    // espectador que abre a tela antes do host fica preso em "não começou"
+    // até dar F5. Para de pollar assim que entra na sala ou a live termina.
+    refetchInterval: status === 'loading' || status === 'not-started' ? 3000 : false,
   })
 
   useEffect(() => {

@@ -47,6 +47,21 @@ function formatCountdown(ms: number): string {
   return `${mm}:${String(ss).padStart(2, '0')}`
 }
 
+/** Traduz os códigos de erro do fn_create_call_request em mensagens amigáveis. */
+function mapRequestError(raw: string): string {
+  if (raw.includes('creator_busy'))
+    return 'Este criador já está em outra videochamada. Tente novamente em instantes.'
+  if (raw.includes('creator_offline'))
+    return 'Este criador ficou offline. Tente novamente quando estiver disponível.'
+  if (raw.includes('creator_does_not_sell_calls'))
+    return 'Este criador não está disponível para videochamadas no momento.'
+  if (raw.includes('price_not_configured'))
+    return 'O criador ainda não configurou o preço da videochamada.'
+  if (raw.includes('cannot_call_self'))
+    return 'Você não pode solicitar uma videochamada para si mesmo.'
+  return raw
+}
+
 export default function BookingCallModal({
   isOpen,
   onClose,
@@ -137,7 +152,7 @@ export default function BookingCallModal({
       })
 
       if (error) {
-        setErrorMessage(error.message)
+        setErrorMessage(mapRequestError(error.message))
         setState('error')
         return
       }

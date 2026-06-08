@@ -331,6 +331,24 @@ serve(async (req) => {
         );
       }
 
+      // Exclusividade 1-a-1 (autoritativa): se o creator já tem OUTRA chamada
+      // paga em andamento, ninguém mais pode pagar até ela encerrar. Janela de
+      // 2h alinhada com generate-zego-token / ActiveCallCTA.
+      const twoHoursAgoIso = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+      const { data: otherPaid } = await supabaseAdmin
+        .from("one_on_one_calls")
+        .select("id")
+        .eq("creator_id", creator_id)
+        .eq("status", "paid")
+        .neq("id", product_id)
+        .gte("paid_at", twoHoursAgoIso)
+        .limit(1);
+      if (otherPaid && otherPaid.length > 0) {
+        throw new Error(
+          "O criador está em outra videochamada no momento. Tente novamente em instantes.",
+        );
+      }
+
       videoCallRequestRow = callRow as typeof videoCallRequestRow;
     }
 
