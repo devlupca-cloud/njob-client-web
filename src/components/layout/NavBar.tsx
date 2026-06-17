@@ -3,11 +3,22 @@ import { Home, User, ShoppingBag, MessageCircle } from 'lucide-react'
 import Logo from '@/components/ui/Logo'
 import { useGuestGuard } from '@/components/ui/GuestModal'
 import { useTranslation } from 'react-i18next'
+import { useUnreadMessages } from '@/hooks/useUnreadMessages'
+
+function UnreadBadge({ count }: { count: number }) {
+  if (count <= 0) return null
+  return (
+    <span className="absolute -top-1.5 -right-2 min-w-[18px] h-[18px] px-1 rounded-full bg-[hsl(var(--primary))] text-white text-[10px] font-semibold flex items-center justify-center leading-none border-2 border-[hsl(var(--background))]">
+      {count > 99 ? '99+' : count}
+    </span>
+  )
+}
 
 export default function NavBar() {
   const { pathname } = useLocation()
   const { guardGuestAction } = useGuestGuard()
   const { t } = useTranslation()
+  const unread = useUnreadMessages()
 
   const navItems = [
     { icon: Home,          label: t('nav.home'),      path: '/home',       guestAllowed: true },
@@ -32,11 +43,14 @@ export default function NavBar() {
                 onClick={(e) => { if (!guestAllowed && guardGuestAction()) e.preventDefault() }}
                 className="flex flex-col items-center gap-1 min-w-[56px] py-1 rounded-xl transition-colors"
               >
-                <Icon
-                  size={22}
-                  className={isActive ? 'text-[hsl(var(--primary))]' : 'text-[hsl(var(--muted-foreground))]'}
-                  strokeWidth={isActive ? 2.2 : 1.8}
-                />
+                <span className="relative">
+                  <Icon
+                    size={22}
+                    className={isActive ? 'text-[hsl(var(--primary))]' : 'text-[hsl(var(--muted-foreground))]'}
+                    strokeWidth={isActive ? 2.2 : 1.8}
+                  />
+                  {path === '/chat' && <UnreadBadge count={unread} />}
+                </span>
                 <span
                   className={`text-[10px] font-medium leading-none ${isActive ? 'text-[hsl(var(--primary))]' : 'text-[hsl(var(--muted-foreground))]'}`}
                 >
@@ -67,11 +81,14 @@ export default function NavBar() {
                 onClick={(e) => { if (!guestAllowed && guardGuestAction()) e.preventDefault() }}
                 className="group relative flex flex-col items-center justify-center w-14 h-14 rounded-xl transition-colors hover:bg-[hsl(var(--secondary))]"
               >
-                <Icon
-                  size={22}
-                  className={isActive ? 'text-[hsl(var(--primary))]' : 'text-[hsl(var(--muted-foreground))]'}
-                  strokeWidth={isActive ? 2.2 : 1.8}
-                />
+                <span className="relative">
+                  <Icon
+                    size={22}
+                    className={isActive ? 'text-[hsl(var(--primary))]' : 'text-[hsl(var(--muted-foreground))]'}
+                    strokeWidth={isActive ? 2.2 : 1.8}
+                  />
+                  {path === '/chat' && <UnreadBadge count={unread} />}
+                </span>
                 <span
                   className={`text-[10px] font-medium leading-none mt-1 ${isActive ? 'text-[hsl(var(--primary))]' : 'text-[hsl(var(--muted-foreground))]'}`}
                 >
