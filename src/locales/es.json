@@ -33,6 +33,11 @@
       "close": "Cerrar"
     }
   },
+  "payment": {
+    "choose": "¿Cómo quieres pagar?",
+    "pix": "Pix",
+    "cardBoleto": "Tarjeta o boleto"
+  },
 
   "nav": {
     "home": "Inicio",

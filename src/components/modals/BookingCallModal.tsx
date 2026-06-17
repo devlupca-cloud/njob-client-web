@@ -15,6 +15,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { useCallStatus } from '@/hooks/useCallStatus'
 import { formatCurrency } from '@/lib/utils'
+import PaymentMethodSheet from '@/components/ui/PaymentMethodSheet'
 
 type Duration = 30 | 60
 
@@ -79,6 +80,7 @@ export default function BookingCallModal({
   const [callId, setCallId] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
+  const [payMethodOpen, setPayMethodOpen] = useState(false)
 
   const { call } = useCallStatus(callId)
 
@@ -172,7 +174,7 @@ export default function BookingCallModal({
     }
   }
 
-  const handlePay = async () => {
+  const handlePay = async (paymentMethod: 'card' | 'pix' = 'card') => {
     if (!callId) return
     try {
       const apiUrl = import.meta.env.VITE_SUPABASE_URL as string
@@ -186,6 +188,7 @@ export default function BookingCallModal({
           creator_id: creatorId,
           product_id: callId,
           product_type: 'video-call-request',
+          payment_method: paymentMethod,
           success_url: `${window.location.origin}/calls/${callId}`,
           cancel_url: `${window.location.origin}/creator/${creatorId}`,
         }),
@@ -245,6 +248,7 @@ export default function BookingCallModal({
   }
 
   return (
+    <>
     <Dialog.Root open={isOpen} onOpenChange={handleDialogChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md" />
@@ -394,7 +398,7 @@ export default function BookingCallModal({
                 </p>
                 <button
                   type="button"
-                  onClick={handlePay}
+                  onClick={() => setPayMethodOpen(true)}
                   className="w-full rounded-xl py-3 text-sm font-semibold text-white
                     bg-[hsl(var(--primary))] hover:brightness-110 transition-all"
                 >
@@ -522,5 +526,15 @@ export default function BookingCallModal({
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+
+    <PaymentMethodSheet
+      open={payMethodOpen}
+      onClose={() => setPayMethodOpen(false)}
+      onSelect={(method) => {
+        setPayMethodOpen(false)
+        void handlePay(method)
+      }}
+    />
+    </>
   )
 }

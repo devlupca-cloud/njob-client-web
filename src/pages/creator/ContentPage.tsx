@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { useToast } from '@/components/ui/Toast'
+import PaymentMethodSheet from '@/components/ui/PaymentMethodSheet'
 import { formatCurrency } from '@/lib/utils'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -601,13 +602,14 @@ export default function ContentPage() {
   const [activeTab, setActiveTab] = useState<TabKey>('packs')
   const [selectedPack, setSelectedPack] = useState<PackCard | null>(null)
   const [isBuyingPack, setIsBuyingPack] = useState(false)
+  const [pendingPay, setPendingPay] = useState<{ run: (m: 'card' | 'pix') => void } | null>(null)
   const [lightbox, setLightbox] = useState<{
     url: string
     title?: string
     type: 'image' | 'video' | 'audio'
   } | null>(null)
 
-  const handleBuyPack = async (pack: PackCard) => {
+  const handleBuyPack = async (pack: PackCard, paymentMethod: 'card' | 'pix' = 'card') => {
     const userId = currentUser?.id || session?.user?.id
     if (!userId) {
       toast({ title: t('auth.sessionExpired'), type: 'error' })
@@ -637,6 +639,7 @@ export default function ContentPage() {
             stripe_price_id: pack.stripe_price_id,
             product_id: pack.id,
             product_type: 'pack',
+            payment_method: paymentMethod,
             success_url: `${appUrl}/purchases`,
             cancel_url: `${appUrl}/home`,
           }),
@@ -842,10 +845,21 @@ export default function ContentPage() {
               setLightbox({ url: item.url, title: item.title, type: item.type })
             }
           }}
-          onBuy={handleBuyPack}
+          onBuy={(pack) => setPendingPay({ run: (m) => handleBuyPack(pack, m) })}
           isBuying={isBuyingPack}
         />
       )}
+
+      <PaymentMethodSheet
+        open={!!pendingPay}
+        loading={isBuyingPack}
+        onClose={() => setPendingPay(null)}
+        onSelect={(method) => {
+          const p = pendingPay
+          setPendingPay(null)
+          p?.run(method)
+        }}
+      />
 
       {/* ── Lightbox ──────────────────────────────────────────────────────── */}
       {lightbox && (

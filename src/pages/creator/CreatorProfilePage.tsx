@@ -25,6 +25,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { useGuestGuard } from '@/components/ui/GuestModal'
 import { useToast } from '@/components/ui/Toast'
+import PaymentMethodSheet from '@/components/ui/PaymentMethodSheet'
 import CardPack from '@/components/cards/CardPack'
 import BookingCallModal from '@/components/modals/BookingCallModal'
 import { useCreatorOnline } from '@/hooks/useCreatorOnline'
@@ -586,6 +587,8 @@ export default function CreatorProfilePage() {
   const [showMenu, setShowMenu] = useState(false)
   const [isBuyingTicket, setIsBuyingTicket] = useState(false)
   const [isBuyingPack, setIsBuyingPack] = useState(false)
+  // Compra pendente aguardando escolha da forma de pagamento (cartão/boleto vs pix).
+  const [pendingPay, setPendingPay] = useState<{ run: (m: 'card' | 'pix') => void } | null>(null)
   const [showMeetingModal, setShowMeetingModal] = useState(false)
   const [showBookingModal, setShowBookingModal] = useState(false)
   const [isStartingChat, setIsStartingChat] = useState(false)
@@ -719,7 +722,7 @@ export default function CreatorProfilePage() {
     }
   }
 
-  const handleBuyPack = async (pack: PackInfo) => {
+  const handleBuyPack = async (pack: PackInfo, paymentMethod: 'card' | 'pix' = 'card') => {
     const userId = currentUser?.id || session?.user?.id
     if (!userId) {
       toast({ title: t('auth.sessionExpired'), type: 'error' })
@@ -749,6 +752,7 @@ export default function CreatorProfilePage() {
             stripe_price_id: pack.stripe_price_id,
             product_id: pack.id,
             product_type: 'pack',
+            payment_method: paymentMethod,
             success_url: `${appUrl}/purchases`,
             cancel_url: `${appUrl}/home`,
           }),
@@ -805,7 +809,21 @@ export default function CreatorProfilePage() {
         toast({ title: t('creator.ticketNotAvailable'), type: 'error' })
         return
       }
+    } catch (err: any) {
+      console.error('[CreatorProfile] Ticket check error:', err)
+      toast({ title: err?.message || t('creator.ticketError'), type: 'error' })
+      return
+    } finally {
+      setIsBuyingTicket(false)
+    }
 
+    // Checagens ok → escolher forma de pagamento antes de ir pro checkout.
+    setPendingPay({ run: (m) => doLiveTicketCheckout(live, m) })
+  }
+
+  const doLiveTicketCheckout = async (live: LiveStream, paymentMethod: 'card' | 'pix') => {
+    setIsBuyingTicket(true)
+    try {
       const { data: sessionData } = await supabase.auth.getSession()
       const token = sessionData?.session?.access_token
       if (!token) {
@@ -828,6 +846,7 @@ export default function CreatorProfilePage() {
             stripe_price_id: live.stripe_price_id,
             product_id: live.id,
             product_type: 'live_ticket',
+            payment_method: paymentMethod,
             success_url: `${appUrl}/purchases`,
             cancel_url: `${appUrl}/home`,
           }),
@@ -1175,10 +1194,21 @@ export default function CreatorProfilePage() {
         <PackModal
           pack={selectedPack}
           onClose={() => !isBuyingPack && setSelectedPack(null)}
-          onBuy={handleBuyPack}
+          onBuy={(pack) => setPendingPay({ run: (m) => handleBuyPack(pack, m) })}
           isLoading={isBuyingPack}
         />
       )}
+
+      <PaymentMethodSheet
+        open={!!pendingPay}
+        loading={isBuyingPack || isBuyingTicket}
+        onClose={() => setPendingPay(null)}
+        onSelect={(method) => {
+          const p = pendingPay
+          setPendingPay(null)
+          p?.run(method)
+        }}
+      />
 
       {showMeetingModal && (
         <MeetingModal

@@ -33,6 +33,11 @@
       "close": "Close"
     }
   },
+  "payment": {
+    "choose": "How would you like to pay?",
+    "pix": "Pix",
+    "cardBoleto": "Card or boleto"
+  },
 
   "nav": {
     "home": "Home",

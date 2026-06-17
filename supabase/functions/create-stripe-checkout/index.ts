@@ -54,6 +54,7 @@ serve(async (req) => {
       duration, // opcional: 30 ou 60 (min)
       success_url: custom_success_url,
       cancel_url: custom_cancel_url,
+      payment_method, // opcional: 'pix' usa cobrança na plataforma + transfer
     } = body as {
       creator_id?: string;
       stripe_price_id?: string;
@@ -62,7 +63,14 @@ serve(async (req) => {
       duration?: number;
       success_url?: string;
       cancel_url?: string;
+      payment_method?: string;
     };
+
+    // Pix em BR não é processável como direct charge na conta conectada
+    // (capability pix_payments não é solicitável). Então o Pix é cobrado NA
+    // PLATAFORMA e repassado ao creator via transfer_data.destination, com a
+    // mesma application_fee. Cartão/boleto seguem direct charge (inalterados).
+    const usePix = payment_method === "pix";
 
     if (!creator_id || !product_id || !product_type) {
       throw new Error(
@@ -589,47 +597,83 @@ serve(async (req) => {
     //   dias — inviável para video-call, cuja janela de pagamento é curta (~30 min).
     const isTimeSensitive =
       product_type === "video-call-request" || product_type === "video-call";
-    const paymentMethodTypes: Array<"card" | "boleto" | "pix"> = ["card"];
+    const paymentMethodTypes: Array<"card" | "boleto"> = ["card"];
     if (!isTimeSensitive) {
       paymentMethodTypes.push("boleto");
     }
-    if ((connectedAccount.capabilities as Record<string, string> | undefined)?.pix_payments === "active") {
-      paymentMethodTypes.push("pix");
-    }
 
-    // 7) CRIAR CHECKOUT COMO DIRECT CHARGE NA CONTA CONECTADA
-    const session = await stripe.checkout.sessions.create(
-      {
+    // Metadata comum às duas modalidades de cobrança (direct vs plataforma).
+    const sharedMetadata: Record<string, string> = {
+      product_id,
+      product_type,
+      creator_id,
+      ...(product_type === "video-call" ? { duration: String(duration ?? 30) } : {}),
+      ...(product_type === "video-call-request" && videoCallRequestRow
+        ? {
+            call_id: videoCallRequestRow.id,
+            duration: String(videoCallRequestRow.scheduled_duration_minutes),
+          }
+        : {}),
+    };
+
+    // 7) CRIAR CHECKOUT
+    let session;
+    if (usePix) {
+      // PIX → cobrança NA PLATAFORMA + transfer pro creator (BR não processa Pix
+      // como direct charge na conta conectada). Line items inline (não pode
+      // referenciar price da conta conectada). `charge_model=platform` avisa o
+      // webhook (handle-stripe-webhook) a buscar o PI na plataforma.
+      const pixName =
+        product_type === "pack"
+          ? "Conteúdo (pacote)"
+          : product_type === "live_ticket"
+          ? "Ingresso de live"
+          : "Vídeo-chamada";
+      session = await stripe.checkout.sessions.create({
         mode: "payment",
-        payment_method_types: paymentMethodTypes,
-        line_items: lineItems,
+        payment_method_types: ["pix"],
+        line_items: [
+          {
+            price_data: {
+              currency: "brl",
+              unit_amount: priceInCents,
+              product_data: { name: pixName },
+            },
+            quantity: 1,
+          },
+        ],
         success_url,
         cancel_url,
         client_reference_id: customerId,
-        // Travar email do comprador — impede uso do link por terceiros
         ...(buyerEmail ? { customer_email: buyerEmail } : {}),
-        metadata: {
-          product_id,
-          product_type,
-          creator_id,
-          ...(product_type === "video-call"
-            ? { duration: duration ?? 30 }
-            : {}),
-          ...(product_type === "video-call-request" && videoCallRequestRow
-            ? {
-                call_id: videoCallRequestRow.id,
-                duration: String(videoCallRequestRow.scheduled_duration_minutes),
-              }
-            : {}),
-        },
+        metadata: { ...sharedMetadata, charge_model: "platform" },
         payment_intent_data: {
           application_fee_amount: feeInCents,
+          transfer_data: { destination: stripeAccountId },
         },
-      },
-      {
-        stripeAccount: stripeAccountId,
-      },
-    );
+      });
+    } else {
+      // CARTÃO / BOLETO → direct charge na conta conectada (inalterado).
+      session = await stripe.checkout.sessions.create(
+        {
+          mode: "payment",
+          payment_method_types: paymentMethodTypes,
+          line_items: lineItems,
+          success_url,
+          cancel_url,
+          client_reference_id: customerId,
+          // Travar email do comprador — impede uso do link por terceiros
+          ...(buyerEmail ? { customer_email: buyerEmail } : {}),
+          metadata: sharedMetadata,
+          payment_intent_data: {
+            application_fee_amount: feeInCents,
+          },
+        },
+        {
+          stripeAccount: stripeAccountId,
+        },
+      );
+    }
 
     // 8) RETORNO
     return new Response(
