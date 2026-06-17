@@ -14,7 +14,10 @@ import { useAuthStore } from '@/store/authStore'
  * única vez (AppShell), pode chamar este hook diretamente.
  */
 export function useUnreadMessages(): number {
-  const userId = useAuthStore((s) => s.user?.id)
+  // Usa `profile.id` (persistido no localStorage, disponível já no load) e não
+  // `user.id` (só populado após o AuthProvider resolver a sessão) — mesmo padrão
+  // do ChatLayout/ChatPage. Com `user.id` a query ficava desabilitada e o badge 0.
+  const userId = useAuthStore((s) => s.profile?.id)
   const queryClient = useQueryClient()
 
   const { data: total = 0 } = useQuery({
