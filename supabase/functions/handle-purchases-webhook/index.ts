@@ -75,6 +75,29 @@ serve(async (req) => {
           break;
         }
 
+        // ─── Confirmação assíncrona (Pix, boleto) ─────────────────────────
+        // Pix/boleto não pagam na hora: a session completa com payment_status
+        // "unpaid" e a confirmação chega aqui. Sem este case, a compra nunca
+        // era creditada para esses métodos.
+        case "checkout.session.async_payment_succeeded": {
+          const session: any = event.data.object;
+          if (session.mode === "payment" && session.payment_status === "paid") {
+            await handlePaymentCheckoutCompleted(session, connectedAccountId);
+          }
+          break;
+        }
+
+        // Pagamento assíncrono falhou (boleto vencido / Pix expirado).
+        // Nada foi creditado, então não há o que reverter — apenas registra.
+        case "checkout.session.async_payment_failed": {
+          const session: any = event.data.object;
+          console.log("async_payment_failed", {
+            session_id: session.id,
+            product_type: session.metadata?.product_type,
+          });
+          break;
+        }
+
         // ─── Subscription lifecycle events ────────────────────────────────
         case "customer.subscription.created":
         case "customer.subscription.updated": {

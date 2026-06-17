@@ -1,0 +1,20 @@
+project_id = "mymlvgfvdmbfeluxreyl"
+
+# Webhooks do Stripe: a autenticidade vem da assinatura (Stripe-Signature +
+# webhook secret) validada dentro de cada função, NAO de um JWT do Supabase.
+# O Stripe nao envia header Authorization, entao o gateway precisa aceitar a
+# requisicao sem JWT — caso contrario o gateway barra com 401 "Missing
+# authorization header" antes de a funcao executar.
+# NAO ligue verify_jwt nessas 4 funcoes.
+
+[functions.handle-purchases-webhook]
+verify_jwt = false
+
+[functions.handle-stripe-webhook]
+verify_jwt = false
+
+[functions.handle-subscriptions-webhook]
+verify_jwt = false
+
+[functions.stripe-payouts-webhook]
+verify_jwt = false

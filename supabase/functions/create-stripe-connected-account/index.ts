@@ -59,6 +59,7 @@ serve(async (req) => {
           card_payments: { requested: true },
           transfers: { requested: true },
           boleto_payments: { requested: true },
+          pix_payments: { requested: true },
         },
         business_type: "individual",
         metadata: { supabase_user_id: userId },
@@ -89,6 +90,20 @@ serve(async (req) => {
 
     // 4) Verificar se a conta ja completou o onboarding
     const account = await stripe.accounts.retrieve(stripeAccountId);
+
+    // 4.1) Garante que a capability de Pix esteja solicitada em contas ja existentes
+    // (contas antigas foram criadas sem pix_payments). Sem ativo/pendente, solicita.
+    const pixCap = (account.capabilities as Record<string, string> | undefined)?.pix_payments;
+    if (pixCap !== "active" && pixCap !== "pending") {
+      try {
+        await stripe.accounts.update(stripeAccountId, {
+          capabilities: { pix_payments: { requested: true } },
+        });
+      } catch (e) {
+        // Nao quebra o fluxo de onboarding se o Pix nao puder ser solicitado.
+        console.error("Falha ao solicitar capability pix_payments:", e);
+      }
+    }
 
     if (account.details_submitted) {
       // Onboarding ja foi concluido. COMPLETED só com charges_enabled E

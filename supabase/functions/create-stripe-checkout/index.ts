@@ -581,11 +581,27 @@ serve(async (req) => {
       buyerEmail = authUser?.user?.email ?? undefined;
     }
 
+    // 6.2) MÉTODOS DE PAGAMENTO
+    // - card: sempre.
+    // - pix: se a conta conectada tiver a capability ativa (instantâneo, serve para tudo).
+    //   Como é direct charge, incluir "pix" numa conta sem a capability faz a sessão falhar.
+    // - boleto: só em compras SEM janela de tempo (pack/live). É assíncrono e pode levar
+    //   dias — inviável para video-call, cuja janela de pagamento é curta (~30 min).
+    const isTimeSensitive =
+      product_type === "video-call-request" || product_type === "video-call";
+    const paymentMethodTypes: Array<"card" | "boleto" | "pix"> = ["card"];
+    if (!isTimeSensitive) {
+      paymentMethodTypes.push("boleto");
+    }
+    if ((connectedAccount.capabilities as Record<string, string> | undefined)?.pix_payments === "active") {
+      paymentMethodTypes.push("pix");
+    }
+
     // 7) CRIAR CHECKOUT COMO DIRECT CHARGE NA CONTA CONECTADA
     const session = await stripe.checkout.sessions.create(
       {
         mode: "payment",
-        payment_method_types: ["card", "boleto"],
+        payment_method_types: paymentMethodTypes,
         line_items: lineItems,
         success_url,
         cancel_url,
