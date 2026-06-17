@@ -36,7 +36,9 @@
   "payment": {
     "choose": "How would you like to pay?",
     "pix": "Pix",
-    "cardBoleto": "Card or boleto"
+    "pixHint": "Instant approval",
+    "cardBoleto": "Card or boleto",
+    "cardHint": "Credit card or boleto"
   },
 
   "nav": {

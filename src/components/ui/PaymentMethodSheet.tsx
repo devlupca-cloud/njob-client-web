@@ -53,19 +53,25 @@ export default function PaymentMethodSheet({
           <button
             onClick={() => onSelect('pix')}
             disabled={loading}
-            className="w-full py-3.5 px-4 rounded-xl flex items-center gap-3 text-left text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50 bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]"
+            className="w-full py-3.5 px-4 rounded-xl flex items-center gap-3 text-left transition-opacity hover:opacity-90 disabled:opacity-50 bg-[hsl(var(--primary))] text-white"
           >
-            <QrCode className="w-5 h-5 shrink-0" />
-            <span className="flex-1">{t('payment.pix')}</span>
+            <QrCode className="w-6 h-6 shrink-0" />
+            <span className="flex flex-col">
+              <span className="text-sm font-semibold leading-tight">{t('payment.pix')}</span>
+              <span className="text-xs text-white/80 leading-tight">{t('payment.pixHint')}</span>
+            </span>
           </button>
 
           <button
             onClick={() => onSelect('card')}
             disabled={loading}
-            className="w-full py-3.5 px-4 rounded-xl flex items-center gap-3 text-left text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50 border border-[hsl(var(--border))] text-[hsl(var(--foreground))]"
+            className="w-full py-3.5 px-4 rounded-xl flex items-center gap-3 text-left transition-colors hover:bg-[hsl(var(--secondary))] disabled:opacity-50 border border-[hsl(var(--border))] text-[hsl(var(--foreground))]"
           >
-            <CreditCard className="w-5 h-5 shrink-0" />
-            <span className="flex-1">{t('payment.cardBoleto')}</span>
+            <CreditCard className="w-6 h-6 shrink-0 text-[hsl(var(--muted-foreground))]" />
+            <span className="flex flex-col">
+              <span className="text-sm font-semibold leading-tight">{t('payment.cardBoleto')}</span>
+              <span className="text-xs text-[hsl(var(--muted-foreground))] leading-tight">{t('payment.cardHint')}</span>
+            </span>
           </button>
         </div>
       </div>
