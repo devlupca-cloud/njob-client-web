@@ -19,6 +19,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 import { useToast } from '@/components/ui/Toast'
 import PaymentMethodSheet from '@/components/ui/PaymentMethodSheet'
+import { PIX_ENABLED } from '@/lib/payment'
 import { formatCurrency } from '@/lib/utils'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -845,7 +846,11 @@ export default function ContentPage() {
               setLightbox({ url: item.url, title: item.title, type: item.type })
             }
           }}
-          onBuy={(pack) => setPendingPay({ run: (m) => handleBuyPack(pack, m) })}
+          onBuy={(pack) =>
+            PIX_ENABLED
+              ? setPendingPay({ run: (m) => handleBuyPack(pack, m) })
+              : handleBuyPack(pack, 'card')
+          }
           isBuying={isBuyingPack}
         />
       )}

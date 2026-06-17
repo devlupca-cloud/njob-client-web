@@ -16,6 +16,7 @@ import { useAuthStore } from '@/store/authStore'
 import { useCallStatus } from '@/hooks/useCallStatus'
 import { formatCurrency } from '@/lib/utils'
 import PaymentMethodSheet from '@/components/ui/PaymentMethodSheet'
+import { PIX_ENABLED } from '@/lib/payment'
 
 type Duration = 30 | 60
 
@@ -398,7 +399,7 @@ export default function BookingCallModal({
                 </p>
                 <button
                   type="button"
-                  onClick={() => setPayMethodOpen(true)}
+                  onClick={() => (PIX_ENABLED ? setPayMethodOpen(true) : handlePay('card'))}
                   className="w-full rounded-xl py-3 text-sm font-semibold text-white
                     bg-[hsl(var(--primary))] hover:brightness-110 transition-all"
                 >

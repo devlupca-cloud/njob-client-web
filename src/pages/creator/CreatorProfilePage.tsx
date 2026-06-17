@@ -26,6 +26,7 @@ import { useAuthStore } from '@/store/authStore'
 import { useGuestGuard } from '@/components/ui/GuestModal'
 import { useToast } from '@/components/ui/Toast'
 import PaymentMethodSheet from '@/components/ui/PaymentMethodSheet'
+import { PIX_ENABLED } from '@/lib/payment'
 import CardPack from '@/components/cards/CardPack'
 import BookingCallModal from '@/components/modals/BookingCallModal'
 import { useCreatorOnline } from '@/hooks/useCreatorOnline'
@@ -818,7 +819,11 @@ export default function CreatorProfilePage() {
     }
 
     // Checagens ok → escolher forma de pagamento antes de ir pro checkout.
-    setPendingPay({ run: (m) => doLiveTicketCheckout(live, m) })
+    if (PIX_ENABLED) {
+      setPendingPay({ run: (m) => doLiveTicketCheckout(live, m) })
+    } else {
+      void doLiveTicketCheckout(live, 'card')
+    }
   }
 
   const doLiveTicketCheckout = async (live: LiveStream, paymentMethod: 'card' | 'pix') => {
@@ -1194,7 +1199,11 @@ export default function CreatorProfilePage() {
         <PackModal
           pack={selectedPack}
           onClose={() => !isBuyingPack && setSelectedPack(null)}
-          onBuy={(pack) => setPendingPay({ run: (m) => handleBuyPack(pack, m) })}
+          onBuy={(pack) =>
+            PIX_ENABLED
+              ? setPendingPay({ run: (m) => handleBuyPack(pack, m) })
+              : handleBuyPack(pack, 'card')
+          }
           isLoading={isBuyingPack}
         />
       )}
