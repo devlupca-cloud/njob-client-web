@@ -25,7 +25,13 @@
     "record": "registro",
     "records": "registros",
     "item": "artículo",
-    "items": "artículos"
+    "items": "artículos",
+    "photoSource": {
+      "title": "Agregar foto",
+      "takePhoto": "Tomar foto",
+      "chooseFromGallery": "Elegir de la galería",
+      "close": "Cerrar"
+    }
   },
 
   "nav": {

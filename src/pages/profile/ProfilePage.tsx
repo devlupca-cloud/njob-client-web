@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -16,6 +16,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useTranslation } from 'react-i18next'
 import { useToast } from '@/components/ui/Toast'
 import DeleteAccountModal from '@/components/modals/DeleteAccountModal'
+import PhotoSourceSheet from '@/components/ui/PhotoSourceSheet'
 
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024
 
@@ -36,7 +37,7 @@ export default function ProfilePage() {
   const [avatarError, setAvatarError] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [photoSheetOpen, setPhotoSheetOpen] = useState(false)
 
   const sections: NavSection[] = [
     { icon: User, label: t('profile.personalInfo'), path: '/profile/info' },
@@ -59,22 +60,20 @@ export default function ProfilePage() {
   })
 
   const handleAvatarClick = () => {
-    fileInputRef.current?.click()
+    setPhotoSheetOpen(true)
   }
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
+  const handlePickPhoto = async (files: File[]) => {
+    const file = files[0]
     if (!file || !user?.id) return
 
     if (file.type && !file.type.startsWith('image/')) {
       toast({ type: 'error', title: t('profile.avatarInvalidType') })
-      if (fileInputRef.current) fileInputRef.current.value = ''
       return
     }
 
     if (file.size > MAX_AVATAR_BYTES) {
       toast({ type: 'error', title: t('profile.avatarTooLarge') })
-      if (fileInputRef.current) fileInputRef.current.value = ''
       return
     }
 
@@ -111,7 +110,6 @@ export default function ProfilePage() {
       toast({ type: 'error', title: t('profile.avatarError'), description })
     } finally {
       setUploading(false)
-      if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
 
@@ -192,14 +190,6 @@ export default function ProfilePage() {
           >
             <Camera className="w-3.5 h-3.5 text-[hsl(var(--primary-foreground))]" />
           </button>
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleFileChange}
-          />
         </div>
 
         {/* Name and username */}
@@ -261,6 +251,13 @@ export default function ProfilePage() {
         loading={deleting}
         onConfirm={handleDeleteAccount}
         onClose={() => setDeleteOpen(false)}
+      />
+
+      <PhotoSourceSheet
+        open={photoSheetOpen}
+        onClose={() => setPhotoSheetOpen(false)}
+        onPick={handlePickPhoto}
+        capture="user"
       />
     </div>
   )

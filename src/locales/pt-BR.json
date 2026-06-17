@@ -25,7 +25,13 @@
     "record": "registro",
     "records": "registros",
     "item": "item",
-    "items": "itens"
+    "items": "itens",
+    "photoSource": {
+      "title": "Adicionar foto",
+      "takePhoto": "Tirar foto",
+      "chooseFromGallery": "Escolher da galeria",
+      "close": "Fechar"
+    }
   },
 
   "nav": {

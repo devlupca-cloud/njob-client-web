@@ -25,7 +25,13 @@
     "record": "record",
     "records": "records",
     "item": "item",
-    "items": "items"
+    "items": "items",
+    "photoSource": {
+      "title": "Add photo",
+      "takePhoto": "Take photo",
+      "chooseFromGallery": "Choose from gallery",
+      "close": "Close"
+    }
   },
 
   "nav": {
